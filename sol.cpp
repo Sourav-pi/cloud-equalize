@@ -6,45 +6,46 @@ using namespace std;
 
 // static map<tuple<int,int,int>,int> point_to_idx;
 
-static vector<int> point_x;
-static vector<int> point_y;
-static vector<int> point_z;
+static vector<int> h_x;
+static vector<int> h_y;
+static vector<int> h_z;
 static vector<int> intensities;
 static int n;
 static int k;
 static int t;
 static string model;
 
-__global__ void compute_distances_kernel(int* x, int* y, int* z, int* distsq, int n) {
+__global__ void compute_distances_kernel(int* x, int* y, int* z, long long* distsq, int n) {
     int i = blockIdx.y * blockDim.y + threadIdx.y;
     int j = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (i < n && j < n) {
-        int dx = x[i] - x[j];
-        int dy = y[i] - y[j];
-        int dz = z[i] - z[j];
+        long long dx = (long long)x[i] - x[j];
+        long long dy = (long long)y[i] - y[j];
+        long long dz = (long long)z[i] - z[j];
         distsq[i * n + j] = dx * dx + dy * dy + dz * dz;
     }
 }
 
-void compute_distances(vector<vector<int>>& distsq) {
-    int *d_x, *d_y, *d_z, *d_distsq;
+void compute_distances(vector<vector<long long>>& distsq) {
+    int *d_x, *d_y, *d_z;
+    long long *d_distsq;
 
     cudaMalloc(&d_x, n * sizeof(int));
     cudaMalloc(&d_y, n * sizeof(int));
     cudaMalloc(&d_z, n * sizeof(int));
-    cudaMalloc(&d_distsq, n * n * sizeof(int));
+    cudaMalloc(&d_distsq, n * n * sizeof(long long));
 
-    cudaMemcpy(d_x, point_x.data(), n * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_y, point_y.data(), n * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_z, point_z.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_x, h_x.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_y, h_y.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice);
 
     dim3 blockDim(16, 16);
     dim3 gridDim((n + blockDim.x - 1) / blockDim.x, (n + blockDim.y - 1) / blockDim.y);
 
     compute_distances_kernel<<<gridDim, blockDim>>>(d_x, d_y, d_z, d_distsq, n);
-    int* h_distsq = (int*)malloc(n * n * sizeof(int));
-    cudaMemcpy(h_distsq, d_distsq, n * n * sizeof(int), cudaMemcpyDeviceToHost);
+    long long* h_distsq = (long long*)malloc(n * n * sizeof(long long));
+    cudaMemcpy(h_distsq, d_distsq, n * n * sizeof(long long), cudaMemcpyDeviceToHost);
 
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -60,11 +61,11 @@ void compute_distances(vector<vector<int>>& distsq) {
 }
 
 void knn(vector<vector<int>>& H) {
-    vector<vector<int>> distsq(n, vector<int>(n));
+    vector<vector<long long>> distsq(n, vector<long long>(n));
 
     compute_distances(distsq);
     for (int i = 0; i < n; i++) {
-        vector<pair<int, int>> tmp;
+        vector<pair<long long, int>> tmp;
         for (int j = 0; j < n; j++) {
             if (j != i) {
                 tmp.push_back(make_pair(distsq[i][j], j));
@@ -78,10 +79,211 @@ void knn(vector<vector<int>>& H) {
 }
 
 void approx_knn(vector<vector<int>>& H) {
+
 }
 
-void kmeans(vector<vector<int>>& H) {
+
+static vector<int> h_point_cls;
+static vector<int> h_cls_cnt;
+static vector<int> h_cls_md_x;
+static vector<int> h_cls_md_y;
+static vector<int> h_cls_md_z;
+
+constexpr int MAX_K = 128;
+__constant__ int c_cls_md_x[MAX_K];
+__constant__ int c_cls_md_y[MAX_K];
+__constant__ int c_cls_md_z[MAX_K];
+
+__global__ void reassign_kernel(int* d_point_cls, int* d_cls_cnt, const int* d_x, const int* d_y, const int* d_z, int n, int k) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) {
+        long long minn = LLONG_MAX;
+        int min_idx = 0;
+        for (int j = 0; j < k; j++) {
+            long long dx = (long long)c_cls_md_x[j] - d_x[i];
+            long long dy = (long long)c_cls_md_y[j] - d_y[i];
+            long long dz = (long long)c_cls_md_z[j] - d_z[i];
+            long long sq = dx * dx + dy * dy + dz * dz;
+            if (sq < minn) {
+                minn = sq;
+                min_idx = j;
+            }
+        }
+        d_point_cls[i] = min_idx;
+        atomicAdd(&d_cls_cnt[min_idx],1);
+    }
+}
+
+void reassign_cls(){
+    int threads_per_block = 256;
+    int blocks = (n + threads_per_block - 1) / threads_per_block;
+    int *d_point_cls;
+    int *d_cls_cnt;
+    int *d_x, *d_y, *d_z;
+
+    cudaMalloc(&d_x, n * sizeof(int));
+    cudaMalloc(&d_y, n * sizeof(int));
+    cudaMalloc(&d_z, n * sizeof(int));
+    cudaMalloc(&d_point_cls, n * sizeof(int));
+    cudaMalloc(&d_cls_cnt, k * sizeof(int));
+    cudaMemset(d_cls_cnt, 0, k * sizeof(int));
+
+    cudaMemcpy(d_x, h_x.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_y, h_y.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpyToSymbol(c_cls_md_x, h_cls_md_x.data(), k * sizeof(int));
+    cudaMemcpyToSymbol(c_cls_md_y, h_cls_md_y.data(), k * sizeof(int));
+    cudaMemcpyToSymbol(c_cls_md_z, h_cls_md_z.data(), k * sizeof(int));
+
+    reassign_kernel<<<blocks, threads_per_block>>>(d_point_cls, d_cls_cnt, d_x, d_y, d_z, n, k);
+
+    cudaMemcpy(h_point_cls.data(), d_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_cls_cnt.data(), d_cls_cnt, k * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaFree(d_point_cls);
+    cudaFree(d_cls_cnt);
+    cudaFree(d_x);
+    cudaFree(d_y);
+    cudaFree(d_z);
+}
+
+__global__ void add_kernel(
+    const int* d_x,
+    const int* d_y,
+    const int* d_z,
+    const int* d_point_cls,
+    long long* d_sum_x,
+    long long* d_sum_y,
+    long long* d_sum_z,
+    int* d_cnt,
+    int n,
+    int k
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    __shared__ long long s_sum_x[MAX_K];
+    __shared__ long long s_sum_y[MAX_K];
+    __shared__ long long s_sum_z[MAX_K];
+    __shared__ int s_cnt[MAX_K];
+
+    for (int c = threadIdx.x; c < k; c += blockDim.x) {
+        s_sum_x[c] = 0;
+        s_sum_y[c] = 0;
+        s_sum_z[c] = 0;
+        s_cnt[c] = 0;
+    }
+    __syncthreads();
+
+    if (i < n) {
+        int cls = d_point_cls[i];
+        if (cls >= 0 && cls < k) {
+            atomicAdd(&s_sum_x[cls], (long long)d_x[i]);
+            atomicAdd(&s_sum_y[cls], (long long)d_y[i]);
+            atomicAdd(&s_sum_z[cls], (long long)d_z[i]);
+            atomicAdd(&s_cnt[cls], 1);
+        }
+    }
+
+    __syncthreads();
+    for (int c = threadIdx.x; c < k; c += blockDim.x) {
+        atomicAdd(&d_sum_x[c], s_sum_x[c]);
+        atomicAdd(&d_sum_y[c], s_sum_y[c]);
+        atomicAdd(&d_sum_z[c], s_sum_z[c]);
+        atomicAdd(&d_cnt[c], s_cnt[c]);
+    }
+}
+
+void recalculate_md() {
+    int threads_per_block = 256;
+    int blocks = (n + threads_per_block - 1) / threads_per_block;
+    int *d_point_cls;
+    int *d_x, *d_y, *d_z;
+    long long *d_sum_x, *d_sum_y, *d_sum_z;
+    int* d_cnt;
+
+    cudaMalloc(&d_x, n * sizeof(int));
+    cudaMalloc(&d_y, n * sizeof(int));
+    cudaMalloc(&d_z, n * sizeof(int));
+    cudaMalloc(&d_point_cls, n * sizeof(int));
+    cudaMalloc(&d_sum_x, k * sizeof(long long));
+    cudaMalloc(&d_sum_y, k * sizeof(long long));
+    cudaMalloc(&d_sum_z, k * sizeof(long long));
+    cudaMalloc(&d_cnt, k * sizeof(int));
+    cudaMemset(d_sum_x, 0, k * sizeof(long long));
+    cudaMemset(d_sum_y, 0, k * sizeof(long long));
+    cudaMemset(d_sum_z, 0, k * sizeof(long long));
+    cudaMemset(d_cnt, 0, k * sizeof(int));
     
+    cudaMemcpy(d_x, h_x.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_y, h_y.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_point_cls, h_point_cls.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+
+    add_kernel<<<blocks, threads_per_block>>>(
+        d_x, d_y, d_z, d_point_cls, d_sum_x, d_sum_y, d_sum_z, d_cnt, n, k
+    );
+
+    vector<long long> h_sum_x(k, 0), h_sum_y(k, 0), h_sum_z(k, 0);
+    vector<int> h_new_cnt(k, 0);
+    cudaMemcpy(h_sum_x.data(), d_sum_x, k * sizeof(long long), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_sum_y.data(), d_sum_y, k * sizeof(long long), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_sum_z.data(), d_sum_z, k * sizeof(long long), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_new_cnt.data(), d_cnt, k * sizeof(int), cudaMemcpyDeviceToHost);
+    h_cls_cnt = h_new_cnt;
+
+    for (int i = 0; i < k; i++) {
+        if (h_cls_cnt[i] > 0) {
+            h_cls_md_x[i] = (int)(h_sum_x[i] / h_cls_cnt[i]);
+            h_cls_md_y[i] = (int)(h_sum_y[i] / h_cls_cnt[i]);
+            h_cls_md_z[i] = (int)(h_sum_z[i] / h_cls_cnt[i]);
+        }
+    }
+
+    cudaFree(d_x);
+    cudaFree(d_y);
+    cudaFree(d_z);
+    cudaFree(d_sum_x);
+    cudaFree(d_sum_y);
+    cudaFree(d_sum_z);
+    cudaFree(d_cnt);
+    cudaFree(d_point_cls);
+
+}
+
+
+void kmeans(vector<vector<int>>& H) {
+    if (k <= 0 || k > MAX_K || n <= 0) return;
+
+    h_point_cls.resize(n);
+    h_cls_cnt.resize(k);
+    h_cls_md_x.resize(k);
+    h_cls_md_y.resize(k);
+    h_cls_md_z.resize(k);
+    // initial mds are the first k points
+    for(int i=0;i<k;i++){
+        h_cls_md_x[i]=h_x[i];
+        h_cls_md_y[i]=h_y[i];
+        h_cls_md_z[i]=h_z[i];
+    }
+    for (int iter = 0; iter < t; iter++) {
+        reassign_cls();
+        recalculate_md();
+    }
+    reassign_cls();
+
+    vector<vector<int>> cls_hist(k, vector<int>(256, 0));
+    for (int i = 0; i < n; i++) {
+        int cls = h_point_cls[i];
+        if (cls >= 0 && cls < k) {
+            cls_hist[cls][intensities[i]] += 1;
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        int cls = h_point_cls[i];
+        if (cls >= 0 && cls < k) {
+            H[i] = cls_hist[cls];
+        }
+    }
+
 }
 
 void takeinput(string inpfile) {
@@ -90,9 +292,9 @@ void takeinput(string inpfile) {
     for (int i = 0; i < n; i++) {
         int x, y, z, I;
         file >> x >> y >> z >> I;
-        point_x.push_back(x);
-        point_y.push_back(y);
-        point_z.push_back(z);
+        h_x.push_back(x);
+        h_y.push_back(y);
+        h_z.push_back(z);
         intensities.push_back(I);
         // point_to_idx[mt(x,y,z)]=i;
     }
@@ -102,7 +304,7 @@ void takeinput(string inpfile) {
 void genopt() {
     ofstream file((model + ".txt").c_str());
     for (int i = 0; i < n; i++) {
-        file << point_x[i] << ' ' << point_y[i] << ' ' << point_z[i] << ' ' << intensities[i] << '\n';
+        file << h_x[i] << ' ' << h_y[i] << ' ' << h_z[i] << ' ' << intensities[i] << '\n';
     }
     file.close();
 }
@@ -137,9 +339,8 @@ void print_histograms(const vector<vector<int>>& H) {
 }
 
 void update_intensities(const vector<vector<int>>& CDF, const vector<int>& Cmin) {
-    int m;
-    if (model == "knn") m = k;
     for (int i = 0; i < n; i++) {
+        int m = (model == "knn") ? (k + 1) : CDF[i][255];
         if (m != Cmin[i])
             intensities[i] = max(0,(CDF[i][intensities[i]] - Cmin[i])) * 255 / (m - Cmin[i]);
     }
