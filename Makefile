@@ -1,6 +1,6 @@
 NVCC ?= nvcc 
 TARGET := sol
-SRC := sol.cpp
+SRC := sol.cpp knn.cu approx_knn.cu kmeans.cu
 
 NVCCFLAGS := -O2 -std=c++11 -x cu
 
@@ -9,7 +9,7 @@ NVCCFLAGS := -O2 -std=c++11 -x cu
 all: $(TARGET)
 
 $(TARGET): $(SRC)
-	$(NVCC) $(NVCCFLAGS) $< -o $@
+	$(NVCC) $(NVCCFLAGS) $^ -o $@
 
 run-knn: $(TARGET)
 	./$(TARGET) input.txt knn
