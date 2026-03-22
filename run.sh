@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-cd /home/cse/btech/cs1230751/jobs_sub/A2
+cd /home/cse/btech/cs1230751/jobs_sub/COL380-A2
 
 module purge
 
