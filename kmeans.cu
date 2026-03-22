@@ -22,6 +22,21 @@ __constant__ int c_cls_md_x[MAX_K];
 __constant__ int c_cls_md_y[MAX_K];
 __constant__ int c_cls_md_z[MAX_K];
 
+
+__device__ inline long long atomicAddLL(long long* address, long long val) {
+    unsigned long long* addr = (unsigned long long*)address;
+    unsigned long long old = *addr, assumed;
+    do {
+        assumed = old;
+        old = atomicCAS(
+            addr,
+            assumed,
+            (unsigned long long)((long long)assumed + val)
+        );
+    } while (assumed != old);
+    return (long long)old;
+}
+
 __global__ void reassign_kernel(
     int* d_point_cls,
     int* d_cls_cnt,
@@ -137,18 +152,18 @@ __global__ void add_kernel(
     if (i < n) {
         int cls = d_point_cls[i];
         if (cls >= 0 && cls < k) {
-            atomicAdd(&s_sum_x[cls], (long long)d_x[i]);
-            atomicAdd(&s_sum_y[cls], (long long)d_y[i]);
-            atomicAdd(&s_sum_z[cls], (long long)d_z[i]);
+            atomicAddLL(&s_sum_x[cls], (long long)d_x[i]);
+            atomicAddLL(&s_sum_y[cls], (long long)d_y[i]);
+            atomicAddLL(&s_sum_z[cls], (long long)d_z[i]);
             atomicAdd(&s_cnt[cls], 1);
         }
     }
 
     __syncthreads();
     for (int c = threadIdx.x; c < k; c += blockDim.x) {
-        atomicAdd(&d_sum_x[c], s_sum_x[c]);
-        atomicAdd(&d_sum_y[c], s_sum_y[c]);
-        atomicAdd(&d_sum_z[c], s_sum_z[c]);
+        atomicAddLL(&d_sum_x[c], s_sum_x[c]);
+        atomicAddLL(&d_sum_y[c], s_sum_y[c]);
+        atomicAddLL(&d_sum_z[c], s_sum_z[c]);
         atomicAdd(&d_cnt[c], s_cnt[c]);
     }
 }
