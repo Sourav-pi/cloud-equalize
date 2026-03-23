@@ -62,4 +62,8 @@ void knn(vector<vector<int>>& H) {
             H[i][intensities[tmp[j].second]] += 1;
         }
     }
+
+    print_histograms(H);
+
+    
 }

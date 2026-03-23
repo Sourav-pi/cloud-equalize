@@ -17,5 +17,6 @@ extern string model;
 void knn(vector<vector<int>>& H);
 void approx_knn(vector<vector<int>>& H);
 void kmeans(vector<vector<int>>& H);
+void print_histograms(const vector<vector<int>>& H);
 
 #endif
