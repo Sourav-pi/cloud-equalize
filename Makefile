@@ -1,18 +1,28 @@
 NVCC ?= nvcc 
 TARGET := sol
 SRC := sol.cpp knn.cu approx_knn.cu kmeans.cu
+CPU_TARGET := cpu_seq
+CPU_SRC := cpu_seq.cpp
 
 NVCCFLAGS := -O2 -std=c++11 -x cu
 
-.PHONY: all clean run-knn
+.PHONY: all cpu clean run-knn benchmark
 
 all: $(TARGET)
+
+cpu: $(CPU_TARGET)
 
 $(TARGET): $(SRC)
 	$(NVCC) $(NVCCFLAGS) $^ -o $@
 
+$(CPU_TARGET): $(CPU_SRC)
+	g++ -O2 -std=c++17 $^ -o $@
+
 run-knn: $(TARGET)
 	./$(TARGET) input.txt knn
 
+benchmark: $(TARGET) $(CPU_TARGET)
+	python3 benchmark_speedup.py --input input.txt
+
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(CPU_TARGET)
