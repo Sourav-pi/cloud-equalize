@@ -100,6 +100,7 @@ def build_knn_neighbors(points: Sequence[Point], k: int) -> List[List[int]]:
             d.append((sq_dist(pi, points[j]), j))
         d.sort(key=lambda x: (x[0], x[1]))
         neighbors[i] = [idx for _, idx in d[:k]]
+        print(neighbors[i])
     return neighbors
 
 
@@ -321,9 +322,9 @@ def main() -> None:
     approx_i = approx_knn_equalized(points, k)
     kmeans_i = kmeans_equalized(points, k, t)
 
-    write_output(f"{args.out_dir}/knn.txt", points, knn_i)
-    write_output(f"{args.out_dir}/approx_knn.txt", points, approx_i)
-    write_output(f"{args.out_dir}/kmeans.txt", points, kmeans_i)
+    write_output(f"{args.out_dir}/correct_knn.txt", points, knn_i)
+    write_output(f"{args.out_dir}/correct_approx_knn.txt", points, approx_i)
+    write_output(f"{args.out_dir}/correct_kmeans.txt", points, kmeans_i)
 
 
 if __name__ == "__main__":

@@ -1,25 +1,15 @@
-#!/bin/bash
+#!/bin/bash -l
 
-set -e
+set -euo pipefail
 cd /home/cse/btech/cs1230751/jobs_sub/COL380-A2
 
 module purge
+module load compiler/gcc/9.1.0
+module load suite/nvidia-hpc-sdk/20.7/cuda11.0
 
-# Try CUDA toolkit module first
-module load compiler/cuda/12.3/compilervars || true
-
-# If nvcc still missing, try NVIDIA HPC SDK module
-if ! command -v nvcc >/dev/null 2>&1; then
-  module load suite/nvidia-hpc-sdk/24.1/cuda12.0 || true
-fi
-
-# Final check
-if ! command -v nvcc >/dev/null 2>&1; then
-  echo "nvcc still not found after module load"
-  module list
-  exit 127
-fi
+nvidia-smi
+nvcc --version
 
 make clean
-make
-./sol knn
+make NVCCFLAGS='-O2 -std=c++11 -x cu -arch=sm_35 -Xcompiler -fopenmp'
+./sol input.txt knn

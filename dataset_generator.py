@@ -16,9 +16,9 @@ def generate_dataset(n, k, T, output_file="input.txt", seed=None):
         f.write(f"{T}\n")
 
         while len(used_points) < n:
-            x = random.randint(-10000, 10000)
-            y = random.randint(-10000, 10000)
-            z = random.randint(-10000, 10000)
+            x = random.randint(0, 5)
+            y = random.randint(0, 5)
+            z = random.randint(0, 5)
 
             if (x, y, z) in used_points:
                 continue
@@ -31,4 +31,4 @@ def generate_dataset(n, k, T, output_file="input.txt", seed=None):
     print(f"Dataset written to {output_file}")
 
 
-generate_dataset(10, 1, 10)
+generate_dataset(8, 3, 10,"input.txt",42)

@@ -19,4 +19,15 @@ void approx_knn(vector<vector<int>>& H);
 void kmeans(vector<vector<int>>& H);
 void print_histograms(const vector<vector<int>>& H);
 
+#define CUDA_CHECK(call) \
+    do { \
+        cudaError_t err__ = (call); \
+        if (err__ != cudaSuccess) { \
+            cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ \
+                 << " in " << #call << ": " << cudaGetErrorString(err__) << "\n"; \
+            exit(1); \
+        } \
+    } while (0)
+
+
 #endif
