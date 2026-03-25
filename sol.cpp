@@ -74,6 +74,8 @@ int main(int argc, char const* argv[]) {
     string inpfile = argv[1];
     model = argv[2];
 
+    double st = omp_get_wtime();
+
     takeinput(inpfile);
 
     vector<vector<int>> H(n, vector<int>(256, 0));
@@ -94,6 +96,6 @@ int main(int argc, char const* argv[]) {
 
     genopt();
 
-    cout << "Done........." << endl;
+    cout << "Done........." << omp_get_wtime()-st << " s" << endl;
     return 0;
 }
