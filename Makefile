@@ -16,7 +16,7 @@ $(TARGET): $(SRC)
 	$(NVCC) $(NVCCFLAGS) $^ -o $@
 
 $(CPU_TARGET): $(CPU_SRC)
-	g++ -O2 -std=c++17 $^ -o $@
+	g++ -O2 -std=c++17 $^ -o $@ -fopenmp
 
 run-knn: $(TARGET)
 	./$(TARGET) input.txt knn

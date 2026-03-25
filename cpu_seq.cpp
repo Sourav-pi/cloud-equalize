@@ -9,6 +9,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <omp.h>
 
 using namespace std;
 
@@ -219,6 +220,8 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    double st = omp_get_wtime();
+
     const string input_file = argv[1];
     const string model = argv[2];
     const string output_file = (argc == 4) ? argv[3] : ("cpu_" + model + ".txt");
@@ -249,6 +252,8 @@ int main(int argc, char** argv) {
         cerr << "Error: " << ex.what() << '\n';
         return 1;
     }
+
+    cout << omp_get_wtime()-st << " s\n";
 
     return 0;
 }
