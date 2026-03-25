@@ -205,7 +205,10 @@ void kmeans(vector<int>& H) {
     init_kmeans_device_buffers();
     for (int iter = 0; iter < t; iter++) {
         reassign_cls(iter==t-1);
-        if(!recalculate_md()) break;
+        if(!recalculate_md()) {
+            CUDA_CHECK(cudaMemcpy(h_point_cls.data(), d_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost));
+            break;
+        }
     }
 
     vector<int> cls_hist(1LL * k * 256, 0);
