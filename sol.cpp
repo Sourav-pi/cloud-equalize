@@ -99,6 +99,6 @@ int main(int argc, char const* argv[]) {
 
     genopt();
 
-    cout << "Done........." << omp_get_wtime() - st << " s" << endl;
+    cout << "gpu : "<< omp_get_wtime() - st << " s" << endl;
     return 0;
 }

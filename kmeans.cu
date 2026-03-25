@@ -7,15 +7,15 @@ vector<int> h_cls_md_x;
 vector<int> h_cls_md_y;
 vector<int> h_cls_md_z;
 
-static int* d_km_x = nullptr;
-static int* d_km_y = nullptr;
-static int* d_km_z = nullptr;
-static int* d_km_point_cls = nullptr;
-static int* d_km_cls_cnt = nullptr;
-static long long* d_km_sum_x = nullptr;
-static long long* d_km_sum_y = nullptr;
-static long long* d_km_sum_z = nullptr;
-static int* d_km_accum_cnt = nullptr;
+static int* d_x = nullptr;
+static int* d_y = nullptr;
+static int* d_z = nullptr;
+static int* d_point_cls = nullptr;
+static int* d_cls_cnt = nullptr;
+static long long* d_sum_x = nullptr;
+static long long* d_sum_y = nullptr;
+static long long* d_sum_z = nullptr;
+static int* d_accum_cnt = nullptr;
 
 constexpr int MAX_K = 128;
 __constant__ int c_cls_md_x[MAX_K];
@@ -36,15 +36,7 @@ __device__ inline long long atomicAddLL(long long* address, long long val) {
     return (long long)old;
 }
 
-__global__ void reassign_kernel(
-    int* d_point_cls,
-    int* d_cls_cnt,
-    const int* d_x,
-    const int* d_y,
-    const int* d_z,
-    int n,
-    int k
-) {
+__global__ void reassign_kernel(int* d_point_cls, int* d_cls_cnt, const int* d_x, const int* d_y, const int* d_z, int n, int k) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {
         long long min_sq = LLONG_MAX;
@@ -65,76 +57,65 @@ __global__ void reassign_kernel(
 }
 
 static void init_kmeans_device_buffers() {
-    CUDA_CHECK(cudaMalloc(&d_km_x, n * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&d_km_y, n * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&d_km_z, n * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&d_km_point_cls, n * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&d_km_cls_cnt, k * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&d_km_sum_x, k * sizeof(long long)));
-    CUDA_CHECK(cudaMalloc(&d_km_sum_y, k * sizeof(long long)));
-    CUDA_CHECK(cudaMalloc(&d_km_sum_z, k * sizeof(long long)));
-    CUDA_CHECK(cudaMalloc(&d_km_accum_cnt, k * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_x, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_y, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_z, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_point_cls, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_cls_cnt, k * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_sum_x, k * sizeof(long long)));
+    CUDA_CHECK(cudaMalloc(&d_sum_y, k * sizeof(long long)));
+    CUDA_CHECK(cudaMalloc(&d_sum_z, k * sizeof(long long)));
+    CUDA_CHECK(cudaMalloc(&d_accum_cnt, k * sizeof(int)));
 
-    CUDA_CHECK(cudaMemcpy(d_km_x, h_x.data(), n * sizeof(int), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_km_y, h_y.data(), n * sizeof(int), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_km_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_x, h_x.data(), n * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_y, h_y.data(), n * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice));
 }
 
 static void free_kmeans_device_buffers() {
-    CUDA_CHECK(cudaFree(d_km_x));
-    CUDA_CHECK(cudaFree(d_km_y));
-    CUDA_CHECK(cudaFree(d_km_z));
-    CUDA_CHECK(cudaFree(d_km_point_cls));
-    CUDA_CHECK(cudaFree(d_km_cls_cnt));
-    CUDA_CHECK(cudaFree(d_km_sum_x));
-    CUDA_CHECK(cudaFree(d_km_sum_y));
-    CUDA_CHECK(cudaFree(d_km_sum_z));
-    CUDA_CHECK(cudaFree(d_km_accum_cnt));
+    CUDA_CHECK(cudaFree(d_x));
+    CUDA_CHECK(cudaFree(d_y));
+    CUDA_CHECK(cudaFree(d_z));
+    CUDA_CHECK(cudaFree(d_point_cls));
+    CUDA_CHECK(cudaFree(d_cls_cnt));
+    CUDA_CHECK(cudaFree(d_sum_x));
+    CUDA_CHECK(cudaFree(d_sum_y));
+    CUDA_CHECK(cudaFree(d_sum_z));
+    CUDA_CHECK(cudaFree(d_accum_cnt));
 
-    d_km_x = nullptr;
-    d_km_y = nullptr;
-    d_km_z = nullptr;
-    d_km_point_cls = nullptr;
-    d_km_cls_cnt = nullptr;
-    d_km_sum_x = nullptr;
-    d_km_sum_y = nullptr;
-    d_km_sum_z = nullptr;
-    d_km_accum_cnt = nullptr;
+    d_x = nullptr;
+    d_y = nullptr;
+    d_z = nullptr;
+    d_point_cls = nullptr;
+    d_cls_cnt = nullptr;
+    d_sum_x = nullptr;
+    d_sum_y = nullptr;
+    d_sum_z = nullptr;
+    d_accum_cnt = nullptr;
 }
 
 static void reassign_cls(bool cpy) {
     int threads_per_block = 256;
     int blocks = (n + threads_per_block - 1) / threads_per_block;
 
-    CUDA_CHECK(cudaMemset(d_km_cls_cnt, 0, k * sizeof(int)));
+    CUDA_CHECK(cudaMemset(d_cls_cnt, 0, k * sizeof(int)));
     CUDA_CHECK(cudaMemcpyToSymbol(c_cls_md_x, h_cls_md_x.data(), k * sizeof(int)));
     CUDA_CHECK(cudaMemcpyToSymbol(c_cls_md_y, h_cls_md_y.data(), k * sizeof(int)));
     CUDA_CHECK(cudaMemcpyToSymbol(c_cls_md_z, h_cls_md_z.data(), k * sizeof(int)));
 
     reassign_kernel<<<blocks, threads_per_block>>>(
-        d_km_point_cls, d_km_cls_cnt, d_km_x, d_km_y, d_km_z, n, k
+        d_point_cls, d_cls_cnt, d_x, d_y, d_z, n, k
     );
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
     if (cpy) {
-        CUDA_CHECK(cudaMemcpy(h_point_cls.data(), d_km_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_point_cls.data(), d_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost));
     }
-    CUDA_CHECK(cudaMemcpy(h_cls_cnt.data(), d_km_cls_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_cls_cnt.data(), d_cls_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
 }
 
-__global__ void add_kernel(
-    const int* d_x,
-    const int* d_y,
-    const int* d_z,
-    const int* d_point_cls,
-    long long* d_sum_x,
-    long long* d_sum_y,
-    long long* d_sum_z,
-    int* d_cnt,
-    int n,
-    int k
-) {
+__global__ void add_kernel(const int* d_x, const int* d_y, const int* d_z, const int* d_point_cls, long long* d_sum_x, long long* d_sum_y, long long* d_sum_z, int* d_cnt, int n, int k) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
     __shared__ long long s_sum_x[MAX_K];
@@ -173,32 +154,21 @@ static bool recalculate_md() {
     int threads_per_block = 256;
     int blocks = (n + threads_per_block - 1) / threads_per_block;
 
-    CUDA_CHECK(cudaMemset(d_km_sum_x, 0, k * sizeof(long long)));
-    CUDA_CHECK(cudaMemset(d_km_sum_y, 0, k * sizeof(long long)));
-    CUDA_CHECK(cudaMemset(d_km_sum_z, 0, k * sizeof(long long)));
-    CUDA_CHECK(cudaMemset(d_km_accum_cnt, 0, k * sizeof(int)));
+    CUDA_CHECK(cudaMemset(d_sum_x, 0, k * sizeof(long long)));
+    CUDA_CHECK(cudaMemset(d_sum_y, 0, k * sizeof(long long)));
+    CUDA_CHECK(cudaMemset(d_sum_z, 0, k * sizeof(long long)));
+    CUDA_CHECK(cudaMemset(d_accum_cnt, 0, k * sizeof(int)));
 
-    add_kernel<<<blocks, threads_per_block>>>(
-        d_km_x,
-        d_km_y,
-        d_km_z,
-        d_km_point_cls,
-        d_km_sum_x,
-        d_km_sum_y,
-        d_km_sum_z,
-        d_km_accum_cnt,
-        n,
-        k
-    );
+    add_kernel<<<blocks, threads_per_block>>>(d_x, d_y, d_z, d_point_cls, d_sum_x, d_sum_y, d_sum_z, d_accum_cnt, n, k);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
     vector<long long> h_sum_x(k, 0), h_sum_y(k, 0), h_sum_z(k, 0);
     vector<int> h_new_cnt(k, 0);
-    CUDA_CHECK(cudaMemcpy(h_sum_x.data(), d_km_sum_x, k * sizeof(long long), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(h_sum_y.data(), d_km_sum_y, k * sizeof(long long), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(h_sum_z.data(), d_km_sum_z, k * sizeof(long long), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(h_new_cnt.data(), d_km_accum_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_sum_x.data(), d_sum_x, k * sizeof(long long), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_sum_y.data(), d_sum_y, k * sizeof(long long), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_sum_z.data(), d_sum_z, k * sizeof(long long), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_new_cnt.data(), d_accum_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
     h_cls_cnt = h_new_cnt;
 
     bool changed = false;

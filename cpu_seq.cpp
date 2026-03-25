@@ -253,7 +253,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    cout << omp_get_wtime()-st << " s\n";
+    cout << "cpu : " << omp_get_wtime()-st << " s\n";
 
     return 0;
 }
