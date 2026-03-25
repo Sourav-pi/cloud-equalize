@@ -8,6 +8,8 @@ int n;
 int k;
 int t;
 string model;
+extern vector<int> h_cls_cnt;
+extern vector<int> h_point_cls;
 
 void takeinput(string inpfile) {
     ifstream file(inpfile.c_str());
@@ -66,7 +68,7 @@ void print_histograms(const vector<int>& H) {
 void update_intensities(const vector<int>& CDF, const vector<int>& Cmin) {
     for (int i = 0; i < n; i++) {
         int base = i * 256;
-        int m = (model == "knn") ? (k + 1) : CDF[base + 255];
+        int m = (model != "kmeans") ? (k + 1) : h_cls_cnt[h_point_cls[i]];
         if (m != Cmin[i]) {
             intensities[i] = max(0, (CDF[base + intensities[i]] - Cmin[i])) * 255 / (m - Cmin[i]);
         }

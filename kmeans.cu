@@ -1,11 +1,11 @@
 #include "common.hpp"
 #include <cuda_runtime.h>
 
-static vector<int> h_point_cls;
-static vector<int> h_cls_cnt;
-static vector<int> h_cls_md_x;
-static vector<int> h_cls_md_y;
-static vector<int> h_cls_md_z;
+vector<int> h_point_cls;
+vector<int> h_cls_cnt;
+vector<int> h_cls_md_x;
+vector<int> h_cls_md_y;
+vector<int> h_cls_md_z;
 
 static int* d_km_x = nullptr;
 static int* d_km_y = nullptr;
@@ -102,7 +102,7 @@ static void free_kmeans_device_buffers() {
     d_km_accum_cnt = nullptr;
 }
 
-static void reassign_cls(bool copy_point_cls_to_host) {
+static void reassign_cls(bool cpy) {
     int threads_per_block = 256;
     int blocks = (n + threads_per_block - 1) / threads_per_block;
 
@@ -117,7 +117,7 @@ static void reassign_cls(bool copy_point_cls_to_host) {
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    if (copy_point_cls_to_host) {
+    if (cpy) {
         CUDA_CHECK(cudaMemcpy(h_point_cls.data(), d_km_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost));
     }
     CUDA_CHECK(cudaMemcpy(h_cls_cnt.data(), d_km_cls_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
@@ -169,7 +169,7 @@ __global__ void add_kernel(
     }
 }
 
-static void recalculate_md() {
+static bool recalculate_md() {
     int threads_per_block = 256;
     int blocks = (n + threads_per_block - 1) / threads_per_block;
 
@@ -201,13 +201,20 @@ static void recalculate_md() {
     CUDA_CHECK(cudaMemcpy(h_new_cnt.data(), d_km_accum_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
     h_cls_cnt = h_new_cnt;
 
+    bool changed = false;
     for (int i = 0; i < k; i++) {
         if (h_cls_cnt[i] > 0) {
-            h_cls_md_x[i] = (int)(h_sum_x[i] / h_cls_cnt[i]);
-            h_cls_md_y[i] = (int)(h_sum_y[i] / h_cls_cnt[i]);
-            h_cls_md_z[i] = (int)(h_sum_z[i] / h_cls_cnt[i]);
+            int md_x = (int)(h_sum_x[i] / h_cls_cnt[i]);
+            int md_y = (int)(h_sum_y[i] / h_cls_cnt[i]);
+            int md_z = (int)(h_sum_z[i] / h_cls_cnt[i]);
+            if(h_cls_md_x[i] != md_x || h_cls_md_y[i] != md_y || h_cls_md_z[i] != md_z) changed = true;
+            h_cls_md_x[i] = md_x;
+            h_cls_md_y[i] = md_y;
+            h_cls_md_z[i] = md_z;
         }
     }
+
+    return changed;
 }
 
 void kmeans(vector<int>& H) {
@@ -227,10 +234,9 @@ void kmeans(vector<int>& H) {
 
     init_kmeans_device_buffers();
     for (int iter = 0; iter < t; iter++) {
-        reassign_cls(false);
-        recalculate_md();
+        reassign_cls(iter==t-1);
+        if(!recalculate_md()) break;
     }
-    reassign_cls(true);
 
     vector<int> cls_hist(1LL * k * 256, 0);
     for (int i = 0; i < n; i++) {

@@ -25,4 +25,4 @@ benchmark: $(TARGET) $(CPU_TARGET)
 	python3 benchmark_speedup.py --input input.txt
 
 clean:
-	rm -f $(TARGET) $(CPU_TARGET) knn.txt kmeans.txt approx_knn.txt cpu_seq
+	rm -f $(TARGET) $(CPU_TARGET) knn.txt kmeans.txt approx_knn.txt cpu_seq cpu_*.txt
