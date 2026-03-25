@@ -15,10 +15,10 @@ extern int k;
 extern int t;
 extern string model;
 
-void knn(vector<vector<int>>& H);
-void approx_knn(vector<vector<int>>& H);
-void kmeans(vector<vector<int>>& H);
-void print_histograms(const vector<vector<int>>& H);
+void knn(vector<int>& H);
+void approx_knn(vector<int>& H);
+void kmeans(vector<int>& H);
+void print_histograms(const vector<int>& H);
 
 #define CUDA_CHECK(call) \
     do { \

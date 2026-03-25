@@ -22,7 +22,6 @@ __constant__ int c_cls_md_x[MAX_K];
 __constant__ int c_cls_md_y[MAX_K];
 __constant__ int c_cls_md_z[MAX_K];
 
-
 __device__ inline long long atomicAddLL(long long* address, long long val) {
     unsigned long long* addr = (unsigned long long*)address;
     unsigned long long old = *addr, assumed;
@@ -66,31 +65,31 @@ __global__ void reassign_kernel(
 }
 
 static void init_kmeans_device_buffers() {
-    cudaMalloc(&d_km_x, n * sizeof(int));
-    cudaMalloc(&d_km_y, n * sizeof(int));
-    cudaMalloc(&d_km_z, n * sizeof(int));
-    cudaMalloc(&d_km_point_cls, n * sizeof(int));
-    cudaMalloc(&d_km_cls_cnt, k * sizeof(int));
-    cudaMalloc(&d_km_sum_x, k * sizeof(long long));
-    cudaMalloc(&d_km_sum_y, k * sizeof(long long));
-    cudaMalloc(&d_km_sum_z, k * sizeof(long long));
-    cudaMalloc(&d_km_accum_cnt, k * sizeof(int));
+    CUDA_CHECK(cudaMalloc(&d_km_x, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_km_y, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_km_z, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_km_point_cls, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_km_cls_cnt, k * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_km_sum_x, k * sizeof(long long)));
+    CUDA_CHECK(cudaMalloc(&d_km_sum_y, k * sizeof(long long)));
+    CUDA_CHECK(cudaMalloc(&d_km_sum_z, k * sizeof(long long)));
+    CUDA_CHECK(cudaMalloc(&d_km_accum_cnt, k * sizeof(int)));
 
-    cudaMemcpy(d_km_x, h_x.data(), n * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_km_y, h_y.data(), n * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_km_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(d_km_x, h_x.data(), n * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_km_y, h_y.data(), n * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_km_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice));
 }
 
 static void free_kmeans_device_buffers() {
-    cudaFree(d_km_x);
-    cudaFree(d_km_y);
-    cudaFree(d_km_z);
-    cudaFree(d_km_point_cls);
-    cudaFree(d_km_cls_cnt);
-    cudaFree(d_km_sum_x);
-    cudaFree(d_km_sum_y);
-    cudaFree(d_km_sum_z);
-    cudaFree(d_km_accum_cnt);
+    CUDA_CHECK(cudaFree(d_km_x));
+    CUDA_CHECK(cudaFree(d_km_y));
+    CUDA_CHECK(cudaFree(d_km_z));
+    CUDA_CHECK(cudaFree(d_km_point_cls));
+    CUDA_CHECK(cudaFree(d_km_cls_cnt));
+    CUDA_CHECK(cudaFree(d_km_sum_x));
+    CUDA_CHECK(cudaFree(d_km_sum_y));
+    CUDA_CHECK(cudaFree(d_km_sum_z));
+    CUDA_CHECK(cudaFree(d_km_accum_cnt));
 
     d_km_x = nullptr;
     d_km_y = nullptr;
@@ -107,19 +106,21 @@ static void reassign_cls(bool copy_point_cls_to_host) {
     int threads_per_block = 256;
     int blocks = (n + threads_per_block - 1) / threads_per_block;
 
-    cudaMemset(d_km_cls_cnt, 0, k * sizeof(int));
-    cudaMemcpyToSymbol(c_cls_md_x, h_cls_md_x.data(), k * sizeof(int));
-    cudaMemcpyToSymbol(c_cls_md_y, h_cls_md_y.data(), k * sizeof(int));
-    cudaMemcpyToSymbol(c_cls_md_z, h_cls_md_z.data(), k * sizeof(int));
+    CUDA_CHECK(cudaMemset(d_km_cls_cnt, 0, k * sizeof(int)));
+    CUDA_CHECK(cudaMemcpyToSymbol(c_cls_md_x, h_cls_md_x.data(), k * sizeof(int)));
+    CUDA_CHECK(cudaMemcpyToSymbol(c_cls_md_y, h_cls_md_y.data(), k * sizeof(int)));
+    CUDA_CHECK(cudaMemcpyToSymbol(c_cls_md_z, h_cls_md_z.data(), k * sizeof(int)));
 
     reassign_kernel<<<blocks, threads_per_block>>>(
         d_km_point_cls, d_km_cls_cnt, d_km_x, d_km_y, d_km_z, n, k
     );
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     if (copy_point_cls_to_host) {
-        cudaMemcpy(h_point_cls.data(), d_km_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost);
+        CUDA_CHECK(cudaMemcpy(h_point_cls.data(), d_km_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost));
     }
-    cudaMemcpy(h_cls_cnt.data(), d_km_cls_cnt, k * sizeof(int), cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(h_cls_cnt.data(), d_km_cls_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
 }
 
 __global__ void add_kernel(
@@ -172,10 +173,10 @@ static void recalculate_md() {
     int threads_per_block = 256;
     int blocks = (n + threads_per_block - 1) / threads_per_block;
 
-    cudaMemset(d_km_sum_x, 0, k * sizeof(long long));
-    cudaMemset(d_km_sum_y, 0, k * sizeof(long long));
-    cudaMemset(d_km_sum_z, 0, k * sizeof(long long));
-    cudaMemset(d_km_accum_cnt, 0, k * sizeof(int));
+    CUDA_CHECK(cudaMemset(d_km_sum_x, 0, k * sizeof(long long)));
+    CUDA_CHECK(cudaMemset(d_km_sum_y, 0, k * sizeof(long long)));
+    CUDA_CHECK(cudaMemset(d_km_sum_z, 0, k * sizeof(long long)));
+    CUDA_CHECK(cudaMemset(d_km_accum_cnt, 0, k * sizeof(int)));
 
     add_kernel<<<blocks, threads_per_block>>>(
         d_km_x,
@@ -189,13 +190,15 @@ static void recalculate_md() {
         n,
         k
     );
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     vector<long long> h_sum_x(k, 0), h_sum_y(k, 0), h_sum_z(k, 0);
     vector<int> h_new_cnt(k, 0);
-    cudaMemcpy(h_sum_x.data(), d_km_sum_x, k * sizeof(long long), cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_sum_y.data(), d_km_sum_y, k * sizeof(long long), cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_sum_z.data(), d_km_sum_z, k * sizeof(long long), cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_new_cnt.data(), d_km_accum_cnt, k * sizeof(int), cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(h_sum_x.data(), d_km_sum_x, k * sizeof(long long), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_sum_y.data(), d_km_sum_y, k * sizeof(long long), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_sum_z.data(), d_km_sum_z, k * sizeof(long long), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_new_cnt.data(), d_km_accum_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
     h_cls_cnt = h_new_cnt;
 
     for (int i = 0; i < k; i++) {
@@ -207,7 +210,7 @@ static void recalculate_md() {
     }
 }
 
-void kmeans(vector<vector<int>>& H) {
+void kmeans(vector<int>& H) {
     if (k <= 0 || k > MAX_K || n <= 0) return;
 
     h_point_cls.resize(n);
@@ -229,17 +232,21 @@ void kmeans(vector<vector<int>>& H) {
     }
     reassign_cls(true);
 
-    vector<vector<int>> cls_hist(k, vector<int>(256, 0));
+    vector<int> cls_hist(1LL * k * 256, 0);
     for (int i = 0; i < n; i++) {
         int cls = h_point_cls[i];
         if (cls >= 0 && cls < k) {
-            cls_hist[cls][intensities[i]] += 1;
+            cls_hist[cls * 256 + intensities[i]] += 1;
         }
     }
     for (int i = 0; i < n; i++) {
         int cls = h_point_cls[i];
         if (cls >= 0 && cls < k) {
-            H[i] = cls_hist[cls];
+            int hbase = i * 256;
+            int cbase = cls * 256;
+            for (int b = 0; b < 256; b++) {
+                H[hbase + b] = cls_hist[cbase + b];
+            }
         }
     }
 

@@ -19,7 +19,6 @@ void takeinput(string inpfile) {
         h_y.push_back(y);
         h_z.push_back(z);
         intensities.push_back(I);
-        // point_to_idx[mt(x,y,z)]=i;
     }
     file.close();
 }
@@ -32,28 +31,31 @@ void genopt() {
     file.close();
 }
 
-void compute_cdf(vector<vector<int> >& CDF, vector<int>& Cmin) {
+void compute_cdf(vector<int>& CDF, vector<int>& Cmin) {
     for (int i = 0; i < n; i++) {
-        if(CDF[i][0]>0) Cmin[i]=CDF[i][0];
+        int base = i * 256;
+        if (CDF[base] > 0) Cmin[i] = CDF[base];
         for (int j = 1; j < 256; j++) {
-            CDF[i][j] += CDF[i][j - 1];
-            if (CDF[i][j] > 0) {
-                Cmin[i] = min(Cmin[i], CDF[i][j]);
+            CDF[base + j] += CDF[base + j - 1];
+            if (CDF[base + j] > 0) {
+                Cmin[i] = min(Cmin[i], CDF[base + j]);
             }
         }
     }
 }
 
-void print_histograms(const vector<vector<int>>& H) {
+void print_histograms(const vector<int>& H) {
     for (int i = 0; i < n; i++) {
         cout << "H[" << i << "] = { ";
         bool first = true;
         int total = 0;
+        int base = i * 256;
         for (int j = 0; j < 256; j++) {
-            total += H[i][j];
-            if (H[i][j] == 0) continue;
+            int val = H[base + j];
+            total += val;
+            if (val == 0) continue;
             if (!first) cout << ", ";
-            cout << j << ":" << H[i][j];
+            cout << j << ":" << val;
             first = false;
         }
         if (first) cout << "empty";
@@ -61,11 +63,13 @@ void print_histograms(const vector<vector<int>>& H) {
     }
 }
 
-void update_intensities(const vector<vector<int>>& CDF, const vector<int>& Cmin) {
+void update_intensities(const vector<int>& CDF, const vector<int>& Cmin) {
     for (int i = 0; i < n; i++) {
-        int m = (model == "knn") ? (k + 1) : CDF[i][255];
-        if (m != Cmin[i])
-            intensities[i] = max(0,(CDF[i][intensities[i]] - Cmin[i])) * 255 / (m - Cmin[i]);
+        int base = i * 256;
+        int m = (model == "knn") ? (k + 1) : CDF[base + 255];
+        if (m != Cmin[i]) {
+            intensities[i] = max(0, (CDF[base + intensities[i]] - Cmin[i])) * 255 / (m - Cmin[i]);
+        }
     }
 }
 
@@ -78,24 +82,21 @@ int main(int argc, char const* argv[]) {
 
     takeinput(inpfile);
 
-    vector<vector<int>> H(n, vector<int>(256, 0));
+    vector<int> H(1LL * n * 256, 0);
 
-    // generate hist
     if (model == "knn") knn(H);
     else if (model == "approx_knn") approx_knn(H);
     else if (model == "kmeans") kmeans(H);
     else return 1;
 
-    // get CDF & Cmin
-    auto CDF = H;
+    vector<int> CDF = H;
     vector<int> Cmin(n, INT_MAX);
     compute_cdf(CDF, Cmin);
 
-    // update intensities
-    update_intensities(CDF, Cmin); 
+    update_intensities(CDF, Cmin);
 
     genopt();
 
-    cout << "Done........." << omp_get_wtime()-st << " s" << endl;
+    cout << "Done........." << omp_get_wtime() - st << " s" << endl;
     return 0;
 }
