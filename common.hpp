@@ -18,7 +18,7 @@ extern string model;
 
 void knn(vector<int>& H);
 void approx_knn(vector<int>& H);
-void kmeans(vector<int>& H);
+void kmeans();
 void print_histograms(const vector<int>& H);
 
 #define CUDA_CHECK(call) \

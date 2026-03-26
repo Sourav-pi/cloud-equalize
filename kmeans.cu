@@ -10,12 +10,14 @@ vector<int> h_cls_md_z;
 static int* d_x = nullptr;
 static int* d_y = nullptr;
 static int* d_z = nullptr;
-static int* d_point_cls = nullptr;
-static int* d_cls_cnt = nullptr;
+int* d_point_cls = nullptr;
+int* d_cls_cnt = nullptr;
 static long long* d_sum_x = nullptr;
 static long long* d_sum_y = nullptr;
 static long long* d_sum_z = nullptr;
 static int* d_accum_cnt = nullptr;
+int* d_intensities;
+int* d_cls_hist;
 
 constexpr int MAX_K = 128;
 __constant__ int c_cls_md_x[MAX_K];
@@ -78,12 +80,10 @@ static void init_kmeans_device_buffers() {
     CUDA_CHECK(cudaMemcpy(d_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice));
 }
 
-static void free_kmeans_device_buffers() {
+static void free_kmeans_internal_buffers() {
     CUDA_CHECK(cudaFree(d_x));
     CUDA_CHECK(cudaFree(d_y));
     CUDA_CHECK(cudaFree(d_z));
-    CUDA_CHECK(cudaFree(d_point_cls));
-    CUDA_CHECK(cudaFree(d_cls_cnt));
     CUDA_CHECK(cudaFree(d_sum_x));
     CUDA_CHECK(cudaFree(d_sum_y));
     CUDA_CHECK(cudaFree(d_sum_z));
@@ -92,15 +92,13 @@ static void free_kmeans_device_buffers() {
     d_x = nullptr;
     d_y = nullptr;
     d_z = nullptr;
-    d_point_cls = nullptr;
-    d_cls_cnt = nullptr;
     d_sum_x = nullptr;
     d_sum_y = nullptr;
     d_sum_z = nullptr;
     d_accum_cnt = nullptr;
 }
 
-static void reassign_cls(bool cpy) {
+static void reassign_cls() {
     int threads_per_block = 256;
     int blocks = (n + threads_per_block - 1) / threads_per_block;
 
@@ -114,11 +112,6 @@ static void reassign_cls(bool cpy) {
     );
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
-
-    if (cpy) {
-        CUDA_CHECK(cudaMemcpy(h_point_cls.data(), d_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost));
-    }
-    CUDA_CHECK(cudaMemcpy(h_cls_cnt.data(), d_cls_cnt, k * sizeof(int), cudaMemcpyDeviceToHost));
 }
 
 __global__ void add_kernel(const int* d_x, const int* d_y, const int* d_z, const int* d_point_cls, long long* d_sum_x, long long* d_sum_y, long long* d_sum_z, int* d_cnt, int n, int k) {
@@ -193,8 +186,27 @@ static bool recalculate_md() {
     return changed;
 }
 
-void kmeans(vector<int>& H) {
-    if (k <= 0 || k > MAX_K || n <= 0) return;
+__global__ void clust_hist_kernel(int* d_point_cls, int* d_intensities, int* d_cls_hist, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if(i<n) {
+        atomicAdd(&d_cls_hist[d_point_cls[i]*256 +d_intensities[i]],1);
+    }
+}
+
+
+void kmeans() {
+    if (k <= 0 || k > MAX_K || n <= 0) {
+        d_point_cls = nullptr;
+        d_cls_cnt = nullptr;
+        d_intensities = nullptr;
+        d_cls_hist = nullptr;
+        return;
+    }
+
+    if (d_point_cls) { CUDA_CHECK(cudaFree(d_point_cls)); d_point_cls = nullptr; }
+    if (d_cls_cnt) { CUDA_CHECK(cudaFree(d_cls_cnt)); d_cls_cnt = nullptr; }
+    if (d_intensities) { CUDA_CHECK(cudaFree(d_intensities)); d_intensities = nullptr; }
+    if (d_cls_hist) { CUDA_CHECK(cudaFree(d_cls_hist)); d_cls_hist = nullptr; }
 
     h_point_cls.resize(n);
     h_cls_cnt.resize(k);
@@ -210,30 +222,21 @@ void kmeans(vector<int>& H) {
 
     init_kmeans_device_buffers();
     for (int iter = 0; iter < t; iter++) {
-        reassign_cls(iter==t-1);
-        if(!recalculate_md()) {
-            CUDA_CHECK(cudaMemcpy(h_point_cls.data(), d_point_cls, n * sizeof(int), cudaMemcpyDeviceToHost));
-            break;
-        }
+        reassign_cls();
+        if(!recalculate_md()) break;
     }
 
-    vector<int> cls_hist(1LL * k * 256, 0);
-    for (int i = 0; i < n; i++) {
-        int cls = h_point_cls[i];
-        if (cls >= 0 && cls < k) {
-            cls_hist[cls * 256 + intensities[i]] += 1;
-        }
-    }
-    for (int i = 0; i < n; i++) {
-        int cls = h_point_cls[i];
-        if (cls >= 0 && cls < k) {
-            int hbase = i * 256;
-            int cbase = cls * 256;
-            for (int b = 0; b < 256; b++) {
-                H[hbase + b] = cls_hist[cbase + b];
-            }
-        }
-    }
+    int threads_per_block = 256;
+    int blocks = (n + threads_per_block - 1) / threads_per_block;
+    CUDA_CHECK(cudaMalloc(&d_intensities, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_cls_hist, k * 256 * sizeof(int)));
 
-    free_kmeans_device_buffers();
+    CUDA_CHECK(cudaMemcpy(d_intensities,intensities.data(),n*sizeof(int),cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_cls_hist,0,k*256*sizeof(int)));
+
+    clust_hist_kernel<<<blocks, threads_per_block>>>(d_point_cls, d_intensities, d_cls_hist, n);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    free_kmeans_internal_buffers();
 }

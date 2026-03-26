@@ -16,7 +16,7 @@ $(TARGET): $(SRC)
 	$(NVCC) $(NVCCFLAGS) $^ -o $@
 
 $(CPU_TARGET): $(CPU_SRC)
-	g++ -O2 -std=c++17 $^ -o $@ -fopenmp
+	g++ -std=c++17 $^ -o $@ -fopenmp
 
 run-knn: $(TARGET)
 	./$(TARGET) input.txt knn
@@ -25,7 +25,7 @@ benchmark: $(TARGET) $(CPU_TARGET)
 	python3 benchmark_speedup.py --input input.txt
 
 clean:
-	rm -f $(TARGET) $(CPU_TARGET) knn.txt kmeans.txt approx_knn.txt cpu_seq cpu_*.txt
+	rm -f $(TARGET) $(CPU_TARGET) knn.txt kmeans.txt approx_knn.txt cpu_seq cpu_*.txt *_ans.txt v
 
 cmp_knn : $(TARGET) $(CPU_TARGET)
 	@./$(TARGET) input.txt knn
@@ -44,3 +44,6 @@ cmp_aknn : $(TARGET) $(CPU_TARGET)
 	@./$(CPU_TARGET) input.txt approx_knn
 	@echo "diff : "
 	@diff approx_knn.txt cpu_approx_knn.txt
+
+v : v.cu
+	$(NVCC) $(NVCCFLAGS) v.cu -o v
