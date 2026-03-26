@@ -3,6 +3,7 @@
 
 #include <bits/stdc++.h>
 #include <omp.h>
+#include <cuda_runtime.h>
 
 using namespace std;
 

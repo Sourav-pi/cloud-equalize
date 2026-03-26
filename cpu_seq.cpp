@@ -94,7 +94,9 @@ static vector<int> knn_equalized() {
             ++hist[points[d[r].second].intensity];
         }
 
-        auto [cdf, cmin] = cdf_and_cmin(hist);
+        vector<int> cdf;
+        int cmin;
+        std::tie(cdf, cmin) = cdf_and_cmin(hist);
         out[i] = remap_intensity(points[i].intensity, cdf, cmin, k + 1);
     }
 
@@ -130,9 +132,25 @@ static vector<int> kmeans_assignments() {
                 long long dy = points[i].y - centroids[c][1];
                 long long dz = points[i].z - centroids[c][2];
                 long long dsq = dx * dx + dy * dy + dz * dz;
-                if (dsq < best_d || (dsq == best_d && c < best_c)) {
+                
+                if (dsq < best_d) {
                     best_d = dsq;
                     best_c = c;
+                } else if (dsq == best_d) {
+                    // Lexicographical tie-breaker (X, then Y, then Z)
+                    long long cx = centroids[c][0];
+                    long long cy = centroids[c][1];
+                    long long cz = centroids[c][2];
+                    
+                    long long best_cx = centroids[best_c][0];
+                    long long best_cy = centroids[best_c][1];
+                    long long best_cz = centroids[best_c][2];
+
+                    if (cx < best_cx || 
+                       (cx == best_cx && cy < best_cy) || 
+                       (cx == best_cx && cy == best_cy && cz < best_cz)) {
+                        best_c = c;
+                    }
                 }
             }
             next_assign[i] = best_c;
@@ -170,9 +188,25 @@ static vector<int> kmeans_assignments() {
                 long long dy = points[i].y - centroids[c][1];
                 long long dz = points[i].z - centroids[c][2];
                 long long dsq = dx * dx + dy * dy + dz * dz;
-                if (dsq < best_d || (dsq == best_d && c < best_c)) {
+                
+                if (dsq < best_d) {
                     best_d = dsq;
                     best_c = c;
+                } else if (dsq == best_d) {
+                    // Lexicographical tie-breaker (X, then Y, then Z)
+                    long long cx = centroids[c][0];
+                    long long cy = centroids[c][1];
+                    long long cz = centroids[c][2];
+                    
+                    long long best_cx = centroids[best_c][0];
+                    long long best_cy = centroids[best_c][1];
+                    long long best_cz = centroids[best_c][2];
+
+                    if (cx < best_cx || 
+                       (cx == best_cx && cy < best_cy) || 
+                       (cx == best_cx && cy == best_cy && cz < best_cz)) {
+                        best_c = c;
+                    }
                 }
             }
             assign[i] = best_c;
@@ -197,7 +231,9 @@ static vector<int> kmeans_equalized() {
     vector<int> out(n, 0);
     for (int i = 0; i < n; ++i) {
         int c = assign[i];
-        auto [cdf, cmin] = cdf_and_cmin(cluster_hist[c]);
+        vector<int> cdf;
+        int cmin;
+        std::tie(cdf, cmin) = cdf_and_cmin(cluster_hist[c]);
         out[i] = remap_intensity(points[i].intensity, cdf, cmin, cluster_size[c]);
     }
 
@@ -219,8 +255,7 @@ int main(int argc, char** argv) {
         cerr << "Usage: " << argv[0] << " <input_file> <knn|approx_knn|kmeans> [output_file]\n";
         return 1;
     }
-
-    double st = omp_get_wtime();
+    double start_time = omp_get_wtime();
 
     const string input_file = argv[1];
     const string model = argv[2];
@@ -234,16 +269,18 @@ int main(int argc, char** argv) {
     try {
         vector<int> out;
         if (model == "knn") {
+            double start_time = omp_get_wtime();
             out = knn_equalized();
         } else if (model == "approx_knn") {
             out = approx_knn_equalized();
         } else if (model == "kmeans") {
             out = kmeans_equalized();
+            double end_time = omp_get_wtime();
         } else {
             cerr << "Unknown model: " << model << '\n';
             return 1;
         }
-
+        
         if (!write_output(output_file, out)) {
             cerr << "Failed to write output file: " << output_file << '\n';
             return 1;
@@ -252,8 +289,8 @@ int main(int argc, char** argv) {
         cerr << "Error: " << ex.what() << '\n';
         return 1;
     }
-
-    cout << "cpu : " << omp_get_wtime()-st << " s\n";
+    double end_time = omp_get_wtime();
+    std::cout << "CPU Walltime: " << end_time - start_time << " seconds\n";
 
     return 0;
 }

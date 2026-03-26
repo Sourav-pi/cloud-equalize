@@ -33,19 +33,6 @@ void genopt() {
     file.close();
 }
 
-void compute_cdf(vector<int>& CDF, vector<int>& Cmin) {
-    for (int i = 0; i < n; i++) {
-        int base = i * 256;
-        if (CDF[base] > 0) Cmin[i] = CDF[base];
-        for (int j = 1; j < 256; j++) {
-            CDF[base + j] += CDF[base + j - 1];
-            if (CDF[base + j] > 0) {
-                Cmin[i] = min(Cmin[i], CDF[base + j]);
-            }
-        }
-    }
-}
-
 void print_histograms(const vector<int>& H) {
     for (int i = 0; i < n; i++) {
         cout << "H[" << i << "] = { ";
@@ -65,16 +52,52 @@ void print_histograms(const vector<int>& H) {
     }
 }
 
-void update_intensities(const vector<int>& CDF, const vector<int>& Cmin) {
-    for (int i = 0; i < n; i++) {
-        int base = i * 256;
-        int m = (model != "kmeans") ? (k + 1) : h_cls_cnt[h_point_cls[i]];
-        if (m != Cmin[i]) {
-            intensities[i] = max(0, (CDF[base + intensities[i]] - Cmin[i])) * 255 / (m - Cmin[i]);
+__global__ void compute_cdf_kernel(int* CDF, int* Cmin, int n) {
+    __shared__ int s[256];
+    int i = blockIdx.x;
+    int j = threadIdx.x;
+    if (i >= n) return;
+
+    s[j] = CDF[i * 256 + j];
+    __syncthreads();
+
+    #pragma unroll
+    for (int stride = 1; stride < 256; stride <<= 1) {
+        int add = (j >= stride) ? s[j - stride] : 0;
+        __syncthreads();
+        s[j] += add;
+        __syncthreads();
+    }
+
+    CDF[i * 256 + j] = s[j];
+
+    if (j == 0) {
+        int cmin = INT_MAX;
+        for (int b = 0; b < 256; b++) {
+            if (s[b] > 0) { cmin = s[b]; break; }
         }
+        Cmin[i] = cmin;
     }
 }
 
+__global__ void update_intensities_kernel(
+    const int* CDF, const int* Cmin, int* intensities,
+    const int* h_cls_cnt, const int* h_point_cls,
+    int n, int k, bool is_kmeans)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    int cmin = Cmin[i];
+    int m    = is_kmeans ? h_cls_cnt[h_point_cls[i]] : (k + 1);
+
+    if (m != cmin) {
+        int val = CDF[i * 256 + intensities[i]];
+        intensities[i] = max(0, (val - cmin) * 255 / (m - cmin));
+    }
+}
+
+// ── main: only the two CPU calls swapped for GPU launches ───────────────────
 int main(int argc, char const* argv[]) {
     if (argc != 3) return 1;
     string inpfile = argv[1];
@@ -86,16 +109,43 @@ int main(int argc, char const* argv[]) {
 
     vector<int> H(1LL * n * 256, 0);
 
-    if (model == "knn") knn(H);
+    if      (model == "knn")       knn(H);
     else if (model == "approx_knn") approx_knn(H);
-    else if (model == "kmeans") kmeans(H);
+    else if (model == "kmeans")    kmeans(H);
     else return 1;
 
-    vector<int> CDF = H;
-    vector<int> Cmin(n, INT_MAX);
-    compute_cdf(CDF, Cmin);
+    int *d_CDF, *d_Cmin, *d_intensities;
+    int *d_cls_cnt = nullptr, *d_point_cls = nullptr;
 
-    update_intensities(CDF, Cmin);
+    CUDA_CHECK(cudaMalloc(&d_CDF,         1LL * n * 256 * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_Cmin,        n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_intensities, n * sizeof(int)));
+
+    CUDA_CHECK(cudaMemcpy(d_CDF,         H.data(),            1LL * n * 256 * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_intensities, intensities.data(),  n * sizeof(int),             cudaMemcpyHostToDevice));
+
+    if (model == "kmeans") {
+        CUDA_CHECK(cudaMalloc(&d_cls_cnt,   k * sizeof(int)));
+        CUDA_CHECK(cudaMalloc(&d_point_cls, n * sizeof(int)));
+        CUDA_CHECK(cudaMemcpy(d_cls_cnt,   h_cls_cnt.data(),   k * sizeof(int), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_point_cls, h_point_cls.data(), n * sizeof(int), cudaMemcpyHostToDevice));
+    }
+
+    compute_cdf_kernel<<<n, 256>>>(d_CDF, d_Cmin, n);
+    CUDA_CHECK(cudaGetLastError());
+
+    update_intensities_kernel<<<(n + 255) / 256, 256>>>(
+        d_CDF, d_Cmin, d_intensities,
+        d_cls_cnt, d_point_cls,
+        n, k, model == "kmeans");
+    CUDA_CHECK(cudaGetLastError());
+
+    CUDA_CHECK(cudaMemcpy(intensities.data(), d_intensities, n * sizeof(int), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    cudaFree(d_CDF); cudaFree(d_Cmin); cudaFree(d_intensities);
+    if (d_cls_cnt)   cudaFree(d_cls_cnt);
+    if (d_point_cls) cudaFree(d_point_cls);
 
     genopt();
 

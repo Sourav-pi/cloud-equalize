@@ -20,13 +20,5 @@ nvcc --version
 g++ --version
 
 make clean
-make NVCCFLAGS='-O2 -std=c++11 -x cu -arch=sm_35 -Xcompiler -fopenmp'
-make cpu
-
-# python benchmark_speedup.py \
-# 	--input "${INPUT_FILE}" \
-# 	--models ${MODELS} \
-# 	--runs "${RUNS}" \
-# 	--warmup "${WARMUP}" \
-# 	--no-build
-./sol input.txt knn
+make cmp_kmeans
+make cmp_knn

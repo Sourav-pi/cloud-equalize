@@ -46,7 +46,13 @@ __global__ void reassign_kernel(int* d_point_cls, int* d_cls_cnt, const int* d_x
             long long dy = (long long)c_cls_md_y[j] - d_y[i];
             long long dz = (long long)c_cls_md_z[j] - d_z[i];
             long long sq = dx * dx + dy * dy + dz * dz;
-            if (sq < min_sq) {
+            if (sq < min_sq ||
+                (sq == min_sq &&
+                 (c_cls_md_x[j] < c_cls_md_x[min_idx] ||
+                  (c_cls_md_x[j] == c_cls_md_x[min_idx] &&
+                   (c_cls_md_y[j] < c_cls_md_y[min_idx] ||
+                    (c_cls_md_y[j] == c_cls_md_y[min_idx] &&
+                     c_cls_md_z[j] < c_cls_md_z[min_idx])))))) {
                 min_sq = sq;
                 min_idx = j;
             }

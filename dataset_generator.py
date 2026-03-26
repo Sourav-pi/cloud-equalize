@@ -31,4 +31,4 @@ def generate_dataset(n, k, T, output_file="input.txt", seed=None):
     print(f"Dataset written to {output_file}")
 
 
-generate_dataset(100000, 50, 10,"input.txt",42)
+generate_dataset(100000, 100, 50,"input.txt",42)
