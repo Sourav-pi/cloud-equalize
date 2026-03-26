@@ -142,7 +142,7 @@ __global__ void update_intensities_kmeans_kernel(
     int cmin = Cmin[i];
     int m = h_cls_cnt[h_point_cls[i]];
     if (m != cmin) {
-        intensities[i] = max(0, (cdf_at_intensity[i] - cmin) * 255 / (m - cmin));
+        intensities[i] = max(0, (int)((((float)(cdf_at_intensity[i] - cmin)) / (float)(m - cmin))*255.0));
     }
 }
 

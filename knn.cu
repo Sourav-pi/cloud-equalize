@@ -84,6 +84,7 @@ __global__ void compute_kernel(const int* x, const int* y, const int* z, const i
     }
 
     int hrow = i * 256;
+    H_flat[hrow + intens[i]] += 1;
     for (int t = 0; t < heap_size; t++) {
         int idx = heap[t].idx;
         int bin = intens[idx];
@@ -115,12 +116,7 @@ void knn(vector<int>& H) {
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    CUDA_CHECK(cudaMemcpy(
-        H.data(),
-        d_H,
-        1LL * n * 256 * sizeof(int),
-        cudaMemcpyDeviceToHost
-    ));
+    CUDA_CHECK(cudaMemcpy(H.data(),d_H,1LL * n * 256 * sizeof(int),cudaMemcpyDeviceToHost));
 
     CUDA_CHECK(cudaFree(d_x));
     CUDA_CHECK(cudaFree(d_y));
