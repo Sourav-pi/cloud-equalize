@@ -90,6 +90,7 @@ static vector<int> knn_equalized() {
         });
 
         vector<int> hist(256, 0);
+        hist[points[i].intensity]++;
         for (int r = 0; r < k; ++r) {
             ++hist[points[d[r].second].intensity];
         }

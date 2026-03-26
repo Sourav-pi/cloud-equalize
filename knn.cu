@@ -3,6 +3,8 @@
 
 static constexpr int KMAX = 128;
 static constexpr int THREADS_PER_BLOCK = 256;
+int* d_intensities_knn;
+int* d_H_knn;
 
 struct Neighbor {
     int dist;
@@ -92,35 +94,35 @@ __global__ void compute_kernel(const int* x, const int* y, const int* z, const i
     }
 }
 
-void knn(vector<int>& H) {
+void knn() {
     int *d_x = nullptr, *d_y = nullptr, *d_z = nullptr;
-    int* d_intens = nullptr;
-    int* d_H = nullptr;
+    d_intensities_knn = nullptr;
+    d_H_knn = nullptr;
 
     CUDA_CHECK(cudaMalloc(&d_x, n * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_y, n * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_z, n * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&d_intens, n * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&d_H, 1LL * n * 256 * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_intensities_knn, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_H_knn, 1LL * n * 256 * sizeof(int)));
 
     CUDA_CHECK(cudaMemcpy(d_x, h_x.data(), n * sizeof(int), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_y, h_y.data(), n * sizeof(int), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_z, h_z.data(), n * sizeof(int), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_intens, intensities.data(), n * sizeof(int), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemset(d_H, 0, 1LL * n * 256 * sizeof(int)));
+    CUDA_CHECK(cudaMemcpy(d_intensities_knn, intensities.data(), n * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_H_knn, 0, 1LL * n * 256 * sizeof(int)));
 
     dim3 block_dim(THREADS_PER_BLOCK);
     dim3 grid_dim((n + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK);
 
-    compute_kernel<<<grid_dim, block_dim>>>(d_x, d_y, d_z, d_intens, n, k, d_H);
+    compute_kernel<<<grid_dim, block_dim>>>(d_x, d_y, d_z, d_intensities_knn, n, k, d_H_knn);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    CUDA_CHECK(cudaMemcpy(H.data(),d_H,1LL * n * 256 * sizeof(int),cudaMemcpyDeviceToHost));
+    // CUDA_CHECK(cudaMemcpy(H.data(),d_H_knn,1LL * n * 256 * sizeof(int),cudaMemcpyDeviceToHost));
 
     CUDA_CHECK(cudaFree(d_x));
     CUDA_CHECK(cudaFree(d_y));
     CUDA_CHECK(cudaFree(d_z));
-    CUDA_CHECK(cudaFree(d_intens));
-    CUDA_CHECK(cudaFree(d_H));
+    // CUDA_CHECK(cudaFree(d_intensities_knn));
+    // CUDA_CHECK(cudaFree(d_H_knn));
 }
