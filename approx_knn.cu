@@ -1,5 +1,4 @@
 #include "common.hpp"
-#include "knn_heap_utils.cuh"
 #include <cuda_runtime.h>
 #include <cstdint>
 

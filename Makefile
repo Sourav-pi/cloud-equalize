@@ -4,7 +4,7 @@ SRC := sol.cpp knn.cu approx_knn.cu kmeans.cu
 CPU_TARGET := cpu_seq
 CPU_SRC := cpu_seq.cpp
 
-NVCCFLAGS= -O3 -std=c++11 -x cu -arch=sm_35 -Xcompiler -fopenmp
+NVCCFLAGS= -O3 -std=c++11 -x cu -arch=sm_35 -Xcompiler -fopenmp --use_fast_math
 
 .PHONY: all cpu clean run-knn benchmark
 
