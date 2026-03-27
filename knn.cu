@@ -59,6 +59,77 @@ __device__ __forceinline__ bool worse_knn(int a_dist, int a_idx, int b_dist, int
     return points[a_idx].z > points[b_idx].z;
 }
 
+__device__ __forceinline__ void knn_heap_push_or_replace(
+    int cand_dist,
+    int cand_idx,
+    int eff_k,
+    int* heap_dist,
+    int* heap_idx,
+    int& heap_size,
+    const Point* points
+) {
+    if (eff_k <= 0) return;
+
+    if (heap_size < eff_k) {
+        int pos = heap_size;
+        heap_dist[pos] = cand_dist;
+        heap_idx[pos] = cand_idx;
+        ++heap_size;
+
+        for (; pos > 0; ) {
+            int parent = (pos - 1) >> 1;
+            bool should_swap = worse_knn(
+                heap_dist[pos], heap_idx[pos],
+                heap_dist[parent], heap_idx[parent],
+                points
+            );
+            if (!should_swap) break;
+
+            int tmp_dist = heap_dist[parent];
+            heap_dist[parent] = heap_dist[pos];
+            heap_dist[pos] = tmp_dist;
+
+            int tmp_idx = heap_idx[parent];
+            heap_idx[parent] = heap_idx[pos];
+            heap_idx[pos] = tmp_idx;
+
+            pos = parent;
+        }
+        return;
+    }
+
+    if (!better_knn(cand_dist, cand_idx, heap_dist[0], heap_idx[0], points)) return;
+
+    heap_dist[0] = cand_dist;
+    heap_idx[0] = cand_idx;
+
+    int pos = 0;
+    while (1) {
+        int left = (pos << 1) + 1;
+        int right = left + 1;
+        int selected = pos;
+
+        if (left < heap_size && worse_knn(heap_dist[left], heap_idx[left], heap_dist[selected], heap_idx[selected], points)) {
+            selected = left;
+        }
+        if (right < heap_size && worse_knn(heap_dist[right], heap_idx[right], heap_dist[selected], heap_idx[selected], points)) {
+            selected = right;
+        }
+
+        if (selected == pos) break;
+
+        int tmp_dist = heap_dist[pos];
+        heap_dist[pos] = heap_dist[selected];
+        heap_dist[selected] = tmp_dist;
+
+        int tmp_idx = heap_idx[pos];
+        heap_idx[pos] = heap_idx[selected];
+        heap_idx[selected] = tmp_idx;
+
+        pos = selected;
+    }
+}
+
 // SINGLE FUSED KERNEL
 __global__ void knn_fused_kernel(const Point* in_points, Point* out_points, int n, int k) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -110,40 +181,7 @@ __global__ void knn_fused_kernel(const Point* in_points, Point* out_points, int 
                 int dy = yi - shared_points[j].y;
                 int dz = zi - shared_points[j].z;
                 int cand_dist = dx * dx + dy * dy + dz * dz;
-
-                // Max-Heap logic (UPDATED TO PASS in_points FOR TIE-BREAKING)
-                if (heap_size < eff_k) {
-                    int p = heap_size;
-                    heap_dist[p] = cand_dist;
-                    heap_idx[p] = cand_idx;
-                    heap_size++;
-
-                    while (p > 0) {
-                        int par = (p - 1) >> 1;
-                        if (!worse_knn(heap_dist[p], heap_idx[p], heap_dist[par], heap_idx[par], in_points)) break;
-                        int td = heap_dist[par]; heap_dist[par] = heap_dist[p]; heap_dist[p] = td;
-                        int ti = heap_idx[par]; heap_idx[par] = heap_idx[p]; heap_idx[p] = ti;
-                        p = par;
-                    }
-                } else if (eff_k > 0 && better_knn(cand_dist, cand_idx, heap_dist[0], heap_idx[0], in_points)) {
-                    heap_dist[0] = cand_dist;
-                    heap_idx[0] = cand_idx;
-
-                    int p = 0;
-                    while (true) {
-                        int l = 2 * p + 1;
-                        int r = l + 1;
-                        int worst = p;
-
-                        if (l < heap_size && worse_knn(heap_dist[l], heap_idx[l], heap_dist[worst], heap_idx[worst], in_points)) worst = l;
-                        if (r < heap_size && worse_knn(heap_dist[r], heap_idx[r], heap_dist[worst], heap_idx[worst], in_points)) worst = r;
-
-                        if (worst == p) break;
-                        int td = heap_dist[p]; heap_dist[p] = heap_dist[worst]; heap_dist[worst] = td;
-                        int ti = heap_idx[p]; heap_idx[p] = heap_idx[worst]; heap_idx[worst] = ti;
-                        p = worst;
-                    }
-                }
+                knn_heap_push_or_replace(cand_dist, cand_idx, eff_k, heap_dist, heap_idx, heap_size, in_points);
             }
         }
         

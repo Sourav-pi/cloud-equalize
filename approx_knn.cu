@@ -82,6 +82,77 @@ __device__ __forceinline__ bool worse_knn(int a_dist, int a_idx, int b_dist, int
     return spoints[a_idx].z > spoints[b_idx].z;
 }
 
+__device__ __forceinline__ void aknn_heap_push_or_replace(
+    int cand_dist,
+    int cand_idx,
+    int eff_k,
+    int* hdist,
+    int* hspos,
+    int& hs,
+    const Point* spoints
+) {
+    if (eff_k <= 0) return;
+
+    if (hs < eff_k) {
+        int pos = hs;
+        hdist[pos] = cand_dist;
+        hspos[pos] = cand_idx;
+        ++hs;
+
+        for (; pos > 0; ) {
+            int parent = (pos - 1) >> 1;
+            bool should_swap = worse_knn(
+                hdist[pos], hspos[pos],
+                hdist[parent], hspos[parent],
+                spoints
+            );
+            if (!should_swap) break;
+
+            int tmp_dist = hdist[parent];
+            hdist[parent] = hdist[pos];
+            hdist[pos] = tmp_dist;
+
+            int tmp_idx = hspos[parent];
+            hspos[parent] = hspos[pos];
+            hspos[pos] = tmp_idx;
+
+            pos = parent;
+        }
+        return;
+    }
+
+    if (!better_knn(cand_dist, cand_idx, hdist[0], hspos[0], spoints)) return;
+
+    hdist[0] = cand_dist;
+    hspos[0] = cand_idx;
+
+    int pos = 0;
+    while (1) {
+        int left = (pos << 1) + 1;
+        int right = left + 1;
+        int selected = pos;
+
+        if (left < hs && worse_knn(hdist[left], hspos[left], hdist[selected], hspos[selected], spoints)) {
+            selected = left;
+        }
+        if (right < hs && worse_knn(hdist[right], hspos[right], hdist[selected], hspos[selected], spoints)) {
+            selected = right;
+        }
+
+        if (selected == pos) break;
+
+        int tmp_dist = hdist[pos];
+        hdist[pos] = hdist[selected];
+        hdist[selected] = tmp_dist;
+
+        int tmp_idx = hspos[pos];
+        hspos[pos] = hspos[selected];
+        hspos[selected] = tmp_idx;
+
+        pos = selected;
+    }
+}
+
 // SINGLE FUSED AKNN KERNEL WITH MULTI-BLOCK TILING
 __global__ void aknn_fused_kernel(const int* sidxs, const Point* spoints, Point* out_points, int n, int k) {
     const int i = blockIdx.x * THREADS_PER_BLOCK + threadIdx.x;
@@ -130,34 +201,7 @@ __global__ void aknn_fused_kernel(const int* sidxs, const Point* spoints, Point*
                 const int dy = target_pt.y - tile[t].y;
                 const int dz = target_pt.z - tile[t].z;
                 const int dist = dx * dx + dy * dy + dz * dz;
-
-                if (hs < eff_k) {
-                    hdist[hs] = dist;
-                    hspos[hs] = j;
-                    int p = hs++;
-                    
-                    while (p > 0) {
-                        const int par = (p - 1) >> 1;
-                        if (!worse_knn(hdist[p], hspos[p], hdist[par], hspos[par], spoints)) break;
-                        int td = hdist[par]; hdist[par] = hdist[p]; hdist[p] = td;
-                        int ti = hspos[par]; hspos[par] = hspos[p]; hspos[p] = ti;
-                        p = par;
-                    }
-                } else if (hs > 0 && better_knn(dist, j, hdist[0], hspos[0], spoints)) {
-                    hdist[0] = dist;
-                    hspos[0] = j;
-                    int p = 0;
-                    while (true) {
-                        const int l = 2 * p + 1, r = 2 * p + 2;
-                        int mx = p;
-                        if (l < hs && worse_knn(hdist[l], hspos[l], hdist[mx], hspos[mx], spoints)) mx = l;
-                        if (r < hs && worse_knn(hdist[r], hspos[r], hdist[mx], hspos[mx], spoints)) mx = r;
-                        if (mx == p) break;
-                        int td = hdist[p]; hdist[p] = hdist[mx]; hdist[mx] = td;
-                        int ti = hspos[p]; hspos[p] = hspos[mx]; hspos[mx] = ti;
-                        p = mx;
-                    }
-                }
+                aknn_heap_push_or_replace(dist, j, eff_k, hdist, hspos, hs, spoints);
             }
         }
         __syncthreads();
