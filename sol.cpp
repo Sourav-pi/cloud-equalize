@@ -16,6 +16,8 @@ extern int* d_cls_cnt;
 extern int* d_point_cls;
 extern int* d_intensities_knn;
 extern int* d_H_knn;
+extern int* d_intensities_aknn;
+extern int* d_H_aknn;
 
 void takeinput(string inpfile) {
     ifstream file(inpfile.c_str());
@@ -58,8 +60,10 @@ void print_histograms(const vector<int>& H) {
     }
 }
 
+__launch_bounds__(256)
 __global__ void compute_cdf_kernel(
-    const int* H, const int* intensities, int* Cmin, int* cdf_at_intensity, int n) {
+    const int* __restrict__ H, const int* __restrict__ intensities,
+    int* __restrict__ Cmin, int* __restrict__ cdf_at_intensity, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
 
@@ -69,6 +73,7 @@ __global__ void compute_cdf_kernel(
     int target = intensities[i];
     int target_cdf = 0;
 
+    #pragma unroll 8
     for (int b = 0; b < 256; b++) {
         running += H[base + b];
         if (running > 0 && cmin == INT_MAX) cmin = running;
@@ -79,9 +84,11 @@ __global__ void compute_cdf_kernel(
     cdf_at_intensity[i] = target_cdf;
 }
 
+__launch_bounds__(256)
 __global__ void compute_kmeans_terms_kernel(
-    const int* cls_hist, const int* point_cls, const int* intensities,
-    int* Cmin, int* cdf_at_intensity, int n)
+    const int* __restrict__ cls_hist, const int* __restrict__ point_cls,
+    const int* __restrict__ intensities,
+    int* __restrict__ Cmin, int* __restrict__ cdf_at_intensity, int n)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
@@ -93,6 +100,7 @@ __global__ void compute_kmeans_terms_kernel(
     int target = intensities[i];
     int target_cdf = 0;
 
+    #pragma unroll 8
     for (int b = 0; b < 256; b++) {
         running += cls_hist[base + b];
         if (running > 0 && cmin == INT_MAX) cmin = running;
@@ -103,9 +111,11 @@ __global__ void compute_kmeans_terms_kernel(
     cdf_at_intensity[i] = target_cdf;
 }
 
+__launch_bounds__(256)
 __global__ void update_intensities_kernel(
-    const int* cdf_at_intensity, const int* Cmin, int* intensities,
-    const int* h_cls_cnt, const int* h_point_cls,
+    const int* __restrict__ cdf_at_intensity, const int* __restrict__ Cmin,
+    int* __restrict__ intensities,
+    const int* __restrict__ h_cls_cnt, const int* __restrict__ h_point_cls,
     int n, int k, bool is_kmeans)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -116,13 +126,15 @@ __global__ void update_intensities_kernel(
 
     if (m != cmin) {
         int val = cdf_at_intensity[i];
-        intensities[i] = max(0, (int)(((float)(val - cmin) / (float)(m - cmin))*255.0));
+        intensities[i] = max(0, (int)(__fdividef((float)(val - cmin), (float)(m - cmin)) * 255.0f));
     }
 }
 
+__launch_bounds__(256)
 __global__ void update_intensities_kmeans_kernel(
-    const int* cdf_at_intensity, const int* Cmin, int* intensities,
-    const int* d_cls_cnt, const int* d_point_cls, int n)
+    const int* __restrict__ cdf_at_intensity, const int* __restrict__ Cmin,
+    int* __restrict__ intensities,
+    const int* __restrict__ d_cls_cnt, const int* __restrict__ d_point_cls, int n)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
@@ -130,7 +142,7 @@ __global__ void update_intensities_kmeans_kernel(
     int cmin = Cmin[i];
     int m = d_cls_cnt[d_point_cls[i]];
     if (m != cmin) {
-        intensities[i] = max(0, (int)((((float)(cdf_at_intensity[i] - cmin)) / (float)(m - cmin))*255.0));
+        intensities[i] = max(0, (int)(__fdividef((float)(cdf_at_intensity[i] - cmin), (float)(m - cmin)) * 255.0f));
     }
 }
 
@@ -173,9 +185,8 @@ int main(int argc, char const* argv[]) {
         d_point_cls = nullptr;
         d_cls_hist = nullptr;
         d_intensities = nullptr;
-    } else if (model == "knn" || model == "approx_knn") {
-        if (model == "knn") knn();
-        else approx_knn();
+    } else if (model == "knn") {
+        knn();
 
         int *d_Cmin = nullptr, *d_cdf_at_intensity = nullptr;
 
@@ -200,6 +211,32 @@ int main(int argc, char const* argv[]) {
         cudaFree(d_Cmin);
         cudaFree(d_cdf_at_intensity);
         cudaFree(d_intensities_knn);
+    } else if(model == "approx_knn") {
+        approx_knn();
+
+        int *d_Cmin = nullptr, *d_cdf_at_intensity = nullptr;
+
+        CUDA_CHECK(cudaMalloc(&d_Cmin,        n * sizeof(int)));
+        CUDA_CHECK(cudaMalloc(&d_cdf_at_intensity, n * sizeof(int)));
+
+        int threads = 256;
+        int blocks = (n + threads - 1) / threads;
+        compute_cdf_kernel<<<blocks, threads>>>(d_H_aknn, d_intensities_aknn, d_Cmin, d_cdf_at_intensity, n);
+        CUDA_CHECK(cudaGetLastError());
+
+        update_intensities_kernel<<<(n + 255) / 256, 256>>>(
+            d_cdf_at_intensity, d_Cmin, d_intensities_aknn,
+            nullptr, nullptr,
+            n, k, false);
+        CUDA_CHECK(cudaGetLastError());
+
+        CUDA_CHECK(cudaMemcpy(intensities.data(), d_intensities_aknn, n * sizeof(int), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        cudaFree(d_H_aknn);
+        cudaFree(d_Cmin);
+        cudaFree(d_cdf_at_intensity);
+        cudaFree(d_intensities_aknn);
     } else {
         return 1;
     }
