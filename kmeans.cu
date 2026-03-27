@@ -1,6 +1,14 @@
 #include "common.hpp"
 #include <cuda_runtime.h>
 
+static vector<int> h_x;
+static vector<int> h_y;
+static vector<int> h_z;
+static vector<int> intensities;
+static int n;
+static int k;
+static int t;
+static string model;
 vector<int> h_point_cls;
 vector<int> h_cls_cnt;
 vector<int> h_cls_md_x;
@@ -19,6 +27,29 @@ static int* d_accum_cnt = nullptr;
 int* d_intensities;
 int* d_cls_hist;
 
+static void kmeans_read_input(const string& inpfile) {
+    h_x.clear(); h_y.clear(); h_z.clear(); intensities.clear();
+    ifstream file(inpfile.c_str());
+    file >> n >> k >> t;
+    for (int i = 0; i < n; i++) {
+        int x, y, z, I;
+        file >> x >> y >> z >> I;
+        h_x.push_back(x);
+        h_y.push_back(y);
+        h_z.push_back(z);
+        intensities.push_back(I);
+    }
+    file.close();
+}
+
+static void kmeans_write_output() {
+    ofstream file("kmeans.txt");
+    for (int i = 0; i < n; i++) {
+        file << h_x[i] << " " << h_y[i] << " " << h_z[i] << " " << intensities[i] << "\n";
+    }
+    file.close();
+}
+
 constexpr int MAX_K = 128;
 __constant__ int c_cls_md_x[MAX_K];
 __constant__ int c_cls_md_y[MAX_K];
@@ -29,16 +60,14 @@ __device__ inline long long atomicAddLL(long long* address, long long val) {
     unsigned long long old = *addr, assumed;
     do {
         assumed = old;
-        old = atomicCAS(
-            addr,
-            assumed,
-            (unsigned long long)((long long)assumed + val)
-        );
+        old = atomicCAS(addr, assumed, (unsigned long long)((long long)assumed + val));
     } while (assumed != old);
     return (long long)old;
 }
 
-__global__ void reassign_kernel(int* d_point_cls, int* d_cls_cnt, const int* d_x, const int* d_y, const int* d_z, int n, int k) {
+__global__ void reassign_kernel(int* d_point_cls, int* d_cls_cnt,
+                                const int* d_x, const int* d_y, const int* d_z,
+                                int n, int k) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {
         long long min_sq = LLONG_MAX;
@@ -107,14 +136,14 @@ static void reassign_cls() {
     CUDA_CHECK(cudaMemcpyToSymbol(c_cls_md_y, h_cls_md_y.data(), k * sizeof(int)));
     CUDA_CHECK(cudaMemcpyToSymbol(c_cls_md_z, h_cls_md_z.data(), k * sizeof(int)));
 
-    reassign_kernel<<<blocks, threads_per_block>>>(
-        d_point_cls, d_cls_cnt, d_x, d_y, d_z, n, k
-    );
+    reassign_kernel<<<blocks, threads_per_block>>>(d_point_cls, d_cls_cnt, d_x, d_y, d_z, n, k);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 }
 
-__global__ void add_kernel(const int* d_x, const int* d_y, const int* d_z, const int* d_point_cls, long long* d_sum_x, long long* d_sum_y, long long* d_sum_z, int* d_cnt, int n, int k) {
+__global__ void add_kernel(const int* d_x, const int* d_y, const int* d_z, const int* d_point_cls,
+                           long long* d_sum_x, long long* d_sum_y, long long* d_sum_z,
+                           int* d_cnt, int n, int k) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
     __shared__ long long s_sum_x[MAX_K];
@@ -176,7 +205,7 @@ static bool recalculate_md() {
             int md_x = (int)(h_sum_x[i] / h_cls_cnt[i]);
             int md_y = (int)(h_sum_y[i] / h_cls_cnt[i]);
             int md_z = (int)(h_sum_z[i] / h_cls_cnt[i]);
-            if(h_cls_md_x[i] != md_x || h_cls_md_y[i] != md_y || h_cls_md_z[i] != md_z) changed = true;
+            if (h_cls_md_x[i] != md_x || h_cls_md_y[i] != md_y || h_cls_md_z[i] != md_z) changed = true;
             h_cls_md_x[i] = md_x;
             h_cls_md_y[i] = md_y;
             h_cls_md_z[i] = md_z;
@@ -188,13 +217,48 @@ static bool recalculate_md() {
 
 __global__ void clust_hist_kernel(int* d_point_cls, int* d_intensities, int* d_cls_hist, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if(i<n) {
-        atomicAdd(&d_cls_hist[d_point_cls[i]*256 +d_intensities[i]],1);
+    if (i < n) atomicAdd(&d_cls_hist[d_point_cls[i] * 256 + d_intensities[i]], 1);
+}
+
+__global__ void kmeans_compute_terms_kernel(const int* cls_hist, const int* point_cls,
+                                            const int* intens, int* Cmin, int* cdf_at_intensity, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    int cls = point_cls[i];
+    int base = cls * 256;
+    int running = 0;
+    int cmin = INT_MAX;
+    int target = intens[i];
+    int target_cdf = 0;
+
+    for (int b = 0; b < 256; b++) {
+        running += cls_hist[base + b];
+        if (running > 0 && cmin == INT_MAX) cmin = running;
+        if (b == target) target_cdf = running;
+    }
+
+    Cmin[i] = cmin;
+    cdf_at_intensity[i] = target_cdf;
+}
+
+__global__ void kmeans_update_intensity_kernel(const int* cdf_at_intensity, const int* Cmin,
+                                                int* intens, const int* cls_cnt,
+                                                const int* point_cls, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    int cmin = Cmin[i];
+    int m = cls_cnt[point_cls[i]];
+    if (m != cmin) {
+        int num = cdf_at_intensity[i] - cmin;
+        if (num < 0) num = 0;
+        intens[i] = (num * 255) / (m - cmin);
     }
 }
 
-
-void kmeans() {
+void kmeans(const string& inpfile) {
+    kmeans_read_input(inpfile);
     if (k <= 0 || k > MAX_K || n <= 0) {
         d_point_cls = nullptr;
         d_cls_cnt = nullptr;
@@ -223,20 +287,49 @@ void kmeans() {
     init_kmeans_device_buffers();
     for (int iter = 0; iter < t; iter++) {
         reassign_cls();
-        if(!recalculate_md()) break;
+        if (!recalculate_md()) break;
+    }
+    if (t == 0) {
+        reassign_cls();
     }
 
     int threads_per_block = 256;
     int blocks = (n + threads_per_block - 1) / threads_per_block;
+    int *d_Cmin = nullptr, *d_cdf_at_intensity = nullptr;
+
     CUDA_CHECK(cudaMalloc(&d_intensities, n * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_cls_hist, k * 256 * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_Cmin, n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_cdf_at_intensity, n * sizeof(int)));
 
-    CUDA_CHECK(cudaMemcpy(d_intensities,intensities.data(),n*sizeof(int),cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemset(d_cls_hist,0,k*256*sizeof(int)));
+    CUDA_CHECK(cudaMemcpy(d_intensities, intensities.data(), n * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_cls_hist, 0, k * 256 * sizeof(int)));
 
     clust_hist_kernel<<<blocks, threads_per_block>>>(d_point_cls, d_intensities, d_cls_hist, n);
     CUDA_CHECK(cudaGetLastError());
+
+    kmeans_compute_terms_kernel<<<blocks, threads_per_block>>>(d_cls_hist, d_point_cls, d_intensities, d_Cmin, d_cdf_at_intensity, n);
+    CUDA_CHECK(cudaGetLastError());
+
+    kmeans_update_intensity_kernel<<<blocks, threads_per_block>>>(d_cdf_at_intensity, d_Cmin, d_intensities, d_cls_cnt, d_point_cls, n);
+    CUDA_CHECK(cudaGetLastError());
+
+    CUDA_CHECK(cudaMemcpy(intensities.data(), d_intensities, n * sizeof(int), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaDeviceSynchronize());
 
+    CUDA_CHECK(cudaFree(d_Cmin));
+    CUDA_CHECK(cudaFree(d_cdf_at_intensity));
+    CUDA_CHECK(cudaFree(d_cls_cnt));
+    CUDA_CHECK(cudaFree(d_point_cls));
+    CUDA_CHECK(cudaFree(d_cls_hist));
+    CUDA_CHECK(cudaFree(d_intensities));
+
+    d_cls_cnt = nullptr;
+    d_point_cls = nullptr;
+    d_cls_hist = nullptr;
+    d_intensities = nullptr;
+
     free_kmeans_internal_buffers();
+
+    kmeans_write_output();
 }

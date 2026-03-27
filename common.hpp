@@ -7,18 +7,11 @@
 
 using namespace std;
 
-extern vector<int> h_x;
-extern vector<int> h_y;
-extern vector<int> h_z;
-extern vector<int> intensities;
-extern int n;
-extern int k;
-extern int t;
-extern string model;
 
-void knn();
-void approx_knn();
-void kmeans();
+
+void knn(const string& inpfile);
+void approx_knn(const string& inpfile);
+void kmeans(const string& inpfile);
 void print_histograms(const vector<int>& H);
 
 #define CUDA_CHECK(call) \
