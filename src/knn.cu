@@ -12,7 +12,7 @@ struct __align__(16) Point {
     int intensity;
 };
 
-// Replaced vector with a raw pointer for pinned memory
+// Pinned host storage for CUDA transfers.
 static Point* h_points = nullptr;
 static int n;
 static int k;
@@ -22,28 +22,30 @@ static constexpr int KMAX = 128;
 static constexpr int THREADS_PER_BLOCK = 256;
 
 static void knn_read_input(const string& inpfile) {
-    ifstream file(inpfile.c_str());
-    file >> n >> k >> t;
+    const auto cloud = read_cloud(inpfile, "knn");
+    n = cloud.n; k = cloud.k; t = cloud.iterations;
     
     // Allocate pinned host memory now that we know 'n'
     CUDA_CHECK(cudaMallocHost(&h_points, n * sizeof(Point)));
     
     // Read directly into the pre-allocated pinned memory array
     for (int i = 0; i < n; i++) {
-        file >> h_points[i].x >> h_points[i].y >> h_points[i].z >> h_points[i].intensity;
+        const auto& p = cloud.points[i];
+        h_points[i] = {p.x, p.y, p.z, p.intensity};
     }
-    file.close();
 }
 
 static void knn_write_output() {
-    ofstream file("knn.txt");
+    ofstream file(output_path);
+    if (!file) throw runtime_error("Cannot open output: " + output_path);
     for (int i = 0; i < n; i++) {
         file << h_points[i].x << " " << h_points[i].y << " " << h_points[i].z << " " << h_points[i].intensity << "\n";
     }
     file.close();
+    if (!file) throw runtime_error("Failed to write output: " + output_path);
 }
 
-// UPDATED: Lexicographical tie-breaking (Dist -> X -> Y -> Z)
+// Lexicographical tie-breaking (distance, X, Y, Z).
 __device__ __forceinline__ bool better_knn(int cand_dist, int cand_idx, int heap_dist, int heap_idx, const Point* points) {
     if (cand_dist != heap_dist) return cand_dist < heap_dist;
     if (points[cand_idx].x != points[heap_idx].x) return points[cand_idx].x < points[heap_idx].x;
@@ -51,7 +53,7 @@ __device__ __forceinline__ bool better_knn(int cand_dist, int cand_idx, int heap
     return points[cand_idx].z < points[heap_idx].z;
 }
 
-// UPDATED: Lexicographical tie-breaking (Dist -> X -> Y -> Z)
+// Reverse ordering for the max-heap root.
 __device__ __forceinline__ bool worse_knn(int a_dist, int a_idx, int b_dist, int b_idx, const Point* points) {
     if (a_dist != b_dist) return a_dist > b_dist;
     if (points[a_idx].x != points[b_idx].x) return points[a_idx].x > points[b_idx].x;

@@ -26,23 +26,25 @@ static constexpr int WIN = 15000;
 static constexpr int SHARED_BLOCKS = 3;
 
 static void aknn_read_input(const string& inpfile) {
-    ifstream file(inpfile.c_str());
-    file >> n >> k >> t;
+    const auto cloud = read_cloud(inpfile, "approx_knn");
+    n = cloud.n; k = cloud.k; t = cloud.iterations;
     
     CUDA_CHECK(cudaMallocHost(&h_points, n * sizeof(Point)));
     
     for (int i = 0; i < n; i++) {
-        file >> h_points[i].x >> h_points[i].y >> h_points[i].z >> h_points[i].intensity;
+        const auto& p = cloud.points[i];
+        h_points[i] = {p.x, p.y, p.z, p.intensity};
     }
-    file.close();
 }
 
 static void aknn_write_output() {
-    ofstream file("approx_knn.txt");
+    ofstream file(output_path);
+    if (!file) throw runtime_error("Cannot open output: " + output_path);
     for (int i = 0; i < n; i++) {
         file << h_points[i].x << " " << h_points[i].y << " " << h_points[i].z << " " << h_points[i].intensity << "\n";
     }
     file.close();
+    if (!file) throw runtime_error("Failed to write output: " + output_path);
 }
 
 // CPU Morton Calculation
@@ -173,13 +175,11 @@ __global__ void aknn_fused_kernel(const int* sidxs, const Point* spoints, Point*
     int hspos[KMAX];
     int hs = 0;
 
-    // The user-requested enlarged tile: 
-    // Example: 128 threads * (2*4 + 1) = 1152 elements per chunk
+    // Cooperatively load a 896-point tile with 128 threads.
     constexpr int TILE_SIZE = THREADS_PER_BLOCK * (2 * SHARED_BLOCKS + 1);
     __shared__ Point tile[TILE_SIZE];
 
     // Build the Heap within the Local Window
-    // Notice how we now advance the loop by TILE_SIZE instead of THREADS_PER_BLOCK
     for (int ts = win_st; ts <= win_ed; ts += TILE_SIZE) {
         
         // 1. Load the enlarged chunk cooperatively.

@@ -4,8 +4,10 @@
 #include <bits/stdc++.h>
 #include <omp.h>
 #include <cuda_runtime.h>
+#include "input.hpp"
 
 using namespace std;
+extern string output_path;
 
 
 

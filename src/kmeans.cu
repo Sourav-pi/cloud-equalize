@@ -29,25 +29,25 @@ int* d_cls_hist;
 
 static void kmeans_read_input(const string& inpfile) {
     h_x.clear(); h_y.clear(); h_z.clear(); intensities.clear();
-    ifstream file(inpfile.c_str());
-    file >> n >> k >> t;
+    const auto cloud = read_cloud(inpfile, "kmeans");
+    n = cloud.n; k = cloud.k; t = cloud.iterations;
     for (int i = 0; i < n; i++) {
-        int x, y, z, I;
-        file >> x >> y >> z >> I;
-        h_x.push_back(x);
-        h_y.push_back(y);
-        h_z.push_back(z);
-        intensities.push_back(I);
+        const auto& p = cloud.points[i];
+        h_x.push_back(p.x);
+        h_y.push_back(p.y);
+        h_z.push_back(p.z);
+        intensities.push_back(p.intensity);
     }
-    file.close();
 }
 
 static void kmeans_write_output() {
-    ofstream file("kmeans.txt");
+    ofstream file(output_path);
+    if (!file) throw runtime_error("Cannot open output: " + output_path);
     for (int i = 0; i < n; i++) {
         file << h_x[i] << " " << h_y[i] << " " << h_z[i] << " " << intensities[i] << "\n";
     }
     file.close();
+    if (!file) throw runtime_error("Failed to write output: " + output_path);
 }
 
 constexpr int MAX_K = 128;

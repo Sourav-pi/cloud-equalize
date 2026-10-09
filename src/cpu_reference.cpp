@@ -9,7 +9,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
-#include <omp.h>
+#include "input.hpp"
 
 using namespace std;
 
@@ -34,17 +34,17 @@ static inline long long sq_dist(const Point& a, const Point& b) {
 }
 
 static bool read_input(const string& path) {
-    ifstream in(path);
-    if (!in) return false;
-
-    in >> n >> k >> t;
-    if (!in || n <= 0 || k <= 0 || t < 0) return false;
-
-    points.resize(n);
-    for (int i = 0; i < n; ++i) {
-        in >> points[i].x >> points[i].y >> points[i].z >> points[i].intensity;
-        if (!in) return false;
-        if (points[i].intensity < 0 || points[i].intensity > 255) return false;
+    try {
+        const auto cloud = read_cloud(path, "kmeans");
+        n = cloud.n; k = cloud.k; t = cloud.iterations;
+        points.resize(n);
+        for (int i = 0; i < n; ++i) {
+            const auto& p = cloud.points[i];
+            points[i] = {p.x, p.y, p.z, p.intensity};
+        }
+    } catch (const exception& ex) {
+        cerr << ex.what() << '\n';
+        return false;
     }
     return true;
 }
@@ -86,7 +86,8 @@ static vector<int> knn_equalized() {
         }
         sort(d.begin(), d.end(), [](const pair<long long, int>& a, const pair<long long, int>& b) {
             if (a.first != b.first) return a.first < b.first;
-            return a.second < b.second;
+            return std::tie(points[a.second].x, points[a.second].y, points[a.second].z, a.second)
+                 < std::tie(points[b.second].x, points[b.second].y, points[b.second].z, b.second);
         });
 
         vector<int> hist(256, 0);
@@ -248,7 +249,8 @@ static bool write_output(const string& path, const vector<int>& new_i) {
     for (int i = 0; i < n; ++i) {
         out << points[i].x << ' ' << points[i].y << ' ' << points[i].z << ' ' << new_i[i] << '\n';
     }
-    return true;
+    out.close();
+    return bool(out);
 }
 
 int main(int argc, char** argv) {
@@ -256,7 +258,7 @@ int main(int argc, char** argv) {
         cerr << "Usage: " << argv[0] << " <input_file> <knn|approx_knn|kmeans> [output_file]\n";
         return 1;
     }
-    double start_time = omp_get_wtime();
+    const auto start_time = chrono::steady_clock::now();
 
     const string input_file = argv[1];
     const string model = argv[2];
@@ -270,13 +272,11 @@ int main(int argc, char** argv) {
     try {
         vector<int> out;
         if (model == "knn") {
-            double start_time = omp_get_wtime();
             out = knn_equalized();
         } else if (model == "approx_knn") {
             out = approx_knn_equalized();
         } else if (model == "kmeans") {
             out = kmeans_equalized();
-            double end_time = omp_get_wtime();
         } else {
             cerr << "Unknown model: " << model << '\n';
             return 1;
@@ -290,8 +290,8 @@ int main(int argc, char** argv) {
         cerr << "Error: " << ex.what() << '\n';
         return 1;
     }
-    double end_time = omp_get_wtime();
-    std::cout << "CPU Walltime: " << end_time - start_time << " seconds\n";
+    const double elapsed = chrono::duration<double>(chrono::steady_clock::now() - start_time).count();
+    std::cout << "CPU Walltime: " << elapsed << " seconds\n";
 
     return 0;
 }
