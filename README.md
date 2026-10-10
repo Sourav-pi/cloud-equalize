@@ -25,7 +25,7 @@ python3 scripts/visualize.py --input examples/sample.txt
 python3 scripts/visualize.py --grid-size 128 --k 64
 ```
 
-The default small terrain fits entirely inside Morton windows and therefore cannot demonstrate large-cloud approximation error. `--grid-size 128` generates 16,384 points, exceeding the window size. `--binary`, `--timeout`, `--data-dir`, `--output`, and `--plot-points` configure execution and rendering. No comparison image is published here because this workflow has not yet been run on a CUDA host.
+The default terrain fits entirely inside Morton windows. Use `--grid-size 128` to generate 16,384 points and exercise the window restriction. `--binary`, `--timeout`, `--data-dir`, `--output`, and `--plot-points` configure execution and rendering.
 
 ## Algorithms
 
@@ -37,7 +37,7 @@ The default small terrain fits entirely inside Morton windows and therefore cann
 
 For a neighborhood of size `m`, the output intensity is integer-truncated `255 * (CDF(I) - Cmin) / (m - Cmin)`. Constant-intensity neighborhoods retain their original intensity. KNN modes use `m = k + 1`, including the target itself. **This is the implemented convention and differs from the original assignment's neighbor-only histogram.**
 
-Both KNN implementations use pinned host memory and separate device input/output buffers. They compute only the minimum-intensity count and the CDF at the target intensity, avoiding a full 256-bin histogram for each point. Pinned transfers are synchronous; the project does not claim transfer/computation overlap. See [algorithm details and tradeoffs](docs/algorithms.md).
+Both KNN implementations use pinned host memory and separate device input/output buffers. They compute only the minimum-intensity count and the CDF at the target intensity, avoiding a full 256-bin histogram for each point. Host-device transfers are synchronous. See [algorithm details and tradeoffs](docs/algorithms.md).
 
 ## Build And Run
 
@@ -101,7 +101,7 @@ Generate a repeatable dataset without modifying tracked examples:
 python3 scripts/generate_dataset.py --n 1000 --k 10 --iterations 20 --seed 42 --output outputs/input.txt
 ```
 
-`examples/sample.txt` is a small, inspectable fixture with distance ties and varied intensities. `examples/legacy-input.txt` preserves the original 100,000-point input; its original generation provenance is unknown. It is not evidence of performance or accuracy at that scale.
+`examples/sample.txt` is a small, inspectable fixture with distance ties and varied intensities. `examples/legacy-input.txt` preserves the original 100,000-point input. Use the seeded generator above for repeatable experiments.
 
 ## Validation
 
@@ -127,9 +127,7 @@ Reports include input and executable hashes, actual build commands, hardware and
 
 With both backends, exact KNN and K-means outputs must match before reporting speedups against the sequential CPU baseline. GPU approximate KNN is compared with GPU exact KNN for both time and intensity MAE. The CPU KNN baseline fully sorts distances; ratios reflect these implementations, not an optimized CPU library. The default per-process timeout is 600 seconds, adjustable with `--timeout`; exhaustive CPU KNN becomes expensive at large `n`.
 
-No new GPU speedup or accuracy numbers are claimed. The [historical logs](docs/benchmarks/README.md) lack enough provenance for a benchmark comparison. See that document for recording publishable results and [CV bullets](docs/resume.md) for supported qualitative claims.
-
-See [local verification](docs/verification.md) for completed checks and the GPU validation still required.
+See [benchmark notes](docs/benchmarks/README.md) for measurement procedures and historical cluster logs.
 
 ## Repository Layout
 
@@ -139,7 +137,7 @@ include/                Shared input contract and CUDA declarations
 scripts/                Generation, references, validation, benchmarking, cluster wrapper
 examples/               Small fixture and original input
 tests/                  CPU workflows and opt-in GPU regression checks
-docs/                   Algorithm notes, CV entry, original specification, historical logs
+docs/                   Algorithm notes, original specification, historical logs
 build/                  Generated executables and build receipts (ignored)
 outputs/, results/      Generated datasets, outputs, benchmark reports (ignored)
 ```
@@ -148,4 +146,4 @@ For cluster execution, use `bash scripts/run_cluster.sh` after requesting a GPU 
 
 ## Limitations
 
-Exact KNN scans all pairs and scales quadratically. Morton proximity is a heuristic: a fixed window can miss spatial neighbors, particularly near ordering discontinuities. Per-thread heaps can increase register pressure or spill to local memory. K-means uses integer centroids, first-point initialization, synchronous host updates, and per-point CDF scans; these choices affect both clustering quality and performance. This is a research/learning implementation with a bounded input contract, not a general point-cloud processing library.
+Exact KNN scans all pairs and scales quadratically. Morton proximity is a heuristic: a fixed window can miss spatial neighbors, particularly near ordering discontinuities. Per-thread heaps can increase register pressure or spill to local memory. K-means uses integer centroids, first-point initialization, synchronous host updates, and per-point CDF scans; these choices affect both clustering quality and performance.
