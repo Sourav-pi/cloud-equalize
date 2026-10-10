@@ -118,6 +118,22 @@ Reference validation defaults to a 2,000-point limit because it is deliberately 
 
 ## Benchmarks
 
+### Jetson AGX Orin Results
+
+Measured on Jetson AGX Orin with CUDA 12.6 and GCC 11.4, using 20,000 generated points, `k = 64`, `T = 20`, and seed 42. Times are medians of five measured fresh-process runs after one discarded warmup and include startup, I/O, allocations, preprocessing, computation, and transfers.
+
+| Algorithm | Sequential CPU | CUDA | Comparison |
+| --- | ---: | ---: | --- |
+| Exact KNN | 26.3417 s | 0.1685 s | **156.3x faster than sequential CPU** |
+| Approximate KNN | - | 0.1646 s | 1.02x faster than CUDA exact KNN |
+| K-means | 0.0838 s | 0.1260 s | Sequential CPU was 1.50x faster |
+
+Exact KNN and K-means matched their CPU outputs at every point. Approximate KNN had intensity **MAE 0.90905** on the `0-255` scale against CUDA exact KNN, with maximum absolute error 44. The sequential CPU KNN baseline fully sorts candidate distances; the speedup compares these implementations on this dataset.
+
+The [full Jetson report](docs/benchmarks/jetson-agx-orin.json) preserves raw runs, quality checks, build commands, hardware details, and source/data hashes. See [benchmark notes](docs/benchmarks/README.md#jetson-agx-orin) for the recorded configuration and reproduction commands.
+
+### Run Benchmarks
+
 ```sh
 make benchmark INPUT=outputs/input.txt RUNS=5 WARMUP=1
 python3 scripts/benchmark.py --input outputs/input.txt --backend cpu --runs 5 --warmup 1 --output results/cpu.json
@@ -137,7 +153,7 @@ include/                Shared input contract and CUDA declarations
 scripts/                Generation, references, validation, benchmarking, cluster wrapper
 examples/               Small fixture and original input
 tests/                  CPU workflows and opt-in GPU regression checks
-docs/                   Algorithm notes, original specification, historical logs
+docs/                   Algorithm notes, published benchmarks, original specification, historical logs
 build/                  Generated executables and build receipts (ignored)
 outputs/, results/      Generated datasets, outputs, benchmark reports (ignored)
 ```

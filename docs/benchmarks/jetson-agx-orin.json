@@ -1,0 +1,603 @@
+{
+  "schema_version": 1,
+  "timestamp_utc": "2026-10-10T07:24:11.154854+00:00",
+  "dataset": {
+    "path": "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+    "sha256": "bd954d9e9874cffb67c009e9e8072ff1ca47739351c53fdfd9057597901b0a54",
+    "n": 20000,
+    "k": 64,
+    "iterations": 20
+  },
+  "protocol": {
+    "runs": 5,
+    "warmup": 1,
+    "timeout_seconds": 3600.0,
+    "timing": "perf_counter around each subprocess: startup, input validation and I/O, allocations, preprocessing, computation, transfers, output I/O, teardown",
+    "warmup_scope": "discarded fresh processes; no persistent CUDA context",
+    "cpu_approx_mode": "excluded: exact-KNN fallback, not a Morton baseline"
+  },
+  "host": {
+    "platform": "Linux-5.15.148-tegra-aarch64-with-glibc2.35",
+    "machine": "aarch64",
+    "processor": "aarch64",
+    "logical_cpus": 12,
+    "omp_num_threads": "runtime default",
+    "cpu_info": {
+      "command": [
+        "lscpu"
+      ],
+      "returncode": 0,
+      "stdout": "Architecture:                       aarch64\nCPU op-mode(s):                     32-bit, 64-bit\nByte Order:                         Little Endian\nCPU(s):                             12\nOn-line CPU(s) list:                0-11\nVendor ID:                          ARM\nModel name:                         Cortex-A78AE\nModel:                              1\nThread(s) per core:                 1\nCore(s) per cluster:                4\nSocket(s):                          -\nCluster(s):                         3\nStepping:                           r0p1\nCPU max MHz:                        2201.6001\nCPU min MHz:                        115.2000\nBogoMIPS:                           62.50\nFlags:                              fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp uscat ilrcpc flagm paca pacg\nL1d cache:                          768 KiB (12 instances)\nL1i cache:                          768 KiB (12 instances)\nL2 cache:                           3 MiB (12 instances)\nL3 cache:                           6 MiB (3 instances)\nNUMA node(s):                       1\nNUMA node0 CPU(s):                  0-11\nVulnerability Gather data sampling: Not affected\nVulnerability Itlb multihit:        Not affected\nVulnerability L1tf:                 Not affected\nVulnerability Mds:                  Not affected\nVulnerability Meltdown:             Not affected\nVulnerability Mmio stale data:      Not affected\nVulnerability Retbleed:             Not affected\nVulnerability Spec rstack overflow: Not affected\nVulnerability Spec store bypass:    Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:           Mitigation; __user pointer sanitization\nVulnerability Spectre v2:           Mitigation; CSV2, but not BHB\nVulnerability Srbds:                Not affected\nVulnerability Tsx async abort:      Not affected",
+      "stderr": ""
+    },
+    "gpu": {
+      "command": [
+        "nvidia-smi"
+      ],
+      "returncode": 0,
+      "stdout": "Sat Oct 10 12:54:11 2026       \n+---------------------------------------------------------------------------------------+\n| NVIDIA-SMI 540.4.0                Driver Version: 540.4.0      CUDA Version: 12.6     |\n|-----------------------------------------+----------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |\n|                                         |                      |               MIG M. |\n|=========================================+======================+======================|\n|   0  Orin (nvgpu)                  N/A  | N/A              N/A |                  N/A |\n| N/A   N/A  N/A               N/A /  N/A | Not Supported        |     N/A          N/A |\n|                                         |                      |                  N/A |\n+-----------------------------------------+----------------------+----------------------+\n                                                                                         \n+---------------------------------------------------------------------------------------+\n| Processes:                                                                            |\n|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |\n|        ID   ID                                                             Usage      |\n|=======================================================================================|\n|  No running processes found                                                           |\n+---------------------------------------------------------------------------------------+",
+      "stderr": ""
+    },
+    "nvcc": {
+      "command": [
+        "nvcc",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2024 NVIDIA Corporation\nBuilt on Wed_Aug_14_10:14:07_PDT_2024\nCuda compilation tools, release 12.6, V12.6.68\nBuild cuda_12.6.r12.6/compiler.34714021_0",
+      "stderr": ""
+    },
+    "cxx": {
+      "command": [
+        "g++",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+      "stderr": ""
+    }
+  },
+  "source": {
+    "commit": {
+      "command": [
+        "git",
+        "-C",
+        "/mnt/nvme/pipeline/cloud-equalize",
+        "rev-parse",
+        "HEAD"
+      ],
+      "returncode": 0,
+      "stdout": "cb4fa646dd18518be29ad7a4c445bd3e5675025b",
+      "stderr": ""
+    },
+    "worktree": {
+      "command": [
+        "git",
+        "-C",
+        "/mnt/nvme/pipeline/cloud-equalize",
+        "status",
+        "--short"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "file_sha256": {
+      "src/approx_knn.cu": "f12c2ff21bad610516fa91e6ae850ea40eb12c215886d1b15fb3df079d6922c3",
+      "src/cpu_reference.cpp": "39702c77f84682f5d8269c4765b1f771815d0eb89744137176f8758b3831a079",
+      "src/kmeans.cu": "25d8c8a1cd192b1d9f9484bb6b6547ed0adf6e1ba6078ebbff54bf421ac8f61f",
+      "src/knn.cu": "7fe1c5efab73622defe04fdc55cf4d3a4956034a9ee5d620c94f0caeb42c52ce",
+      "src/main.cpp": "10cba6dfc2b8c4774cb4be798e516da0c2b65c73af3a98b0d5f0f03068008923",
+      "include/common.hpp": "d9bb2ab4293a969adbcaed5187ea6f35abb26a3b64f606df77c94397d53784d4",
+      "include/input.hpp": "496f0e440644ad78c62dcbd04ee1e80c6c195c7f48d4d0fa1203e81658313821",
+      "include/knn_heap_utils.cuh": "cc8ddf42e19941be516a682e820a9e69597d323cfe96fbc98723549d8a001079",
+      "scripts/benchmark.py": "d02ad0c70ed81aef0ee8f6f273373cc80fe70e11a74fe7b876f364cfb1624ed0",
+      "scripts/generate_dataset.py": "8dddae99de812ab3fc50e970ae6b3f5b5ea60ab598fd863941ee623a8a6e1042",
+      "scripts/mae.py": "d0178c71f16acbb882ed189a10974a2ada77329bf9410aba374a9cf4672a294b",
+      "scripts/record_build.py": "5e2903a0b54841556a440f5c6292702d88fbab39655addfcb91f084d84f08308",
+      "scripts/reference.py": "c8b3d785334e3bdb312ee9240b23b60e1e445c930a5134ba4278991837bac28c",
+      "scripts/run_cluster.sh": "5da5d6bd1fd7b1e0345354b1c7f1bda13a48a4ac9cb8c1605bb27bf84872a26a",
+      "scripts/validate.py": "87b92813897e981ef73aab604f04e25c63ff61b7ad096dcc0a6624b0434adf02",
+      "scripts/visualize.py": "695b36f011b0b86f821f5a8643871a2fa68c10d23096ea00ae8f241ef0e0dbd5"
+    },
+    "makefile_sha256": "9cfa9fd1887006f1a68abdd13761c4c919e9fee51f1baf3716677e7713023423"
+  },
+  "executables": {
+    "cpu": {
+      "path": "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+      "sha256": "92142083289ac5f9f78c86252366fc71d45ab66ca2501a74a98db72947d80267",
+      "build": {
+        "timestamp_utc": "2026-10-10T07:24:10.417162+00:00",
+        "command": [
+          "g++",
+          "-Iinclude",
+          "-O3",
+          "-std=c++17",
+          "-Wall",
+          "-Wextra",
+          "src/cpu_reference.cpp",
+          "-o",
+          "build/cpu_reference"
+        ],
+        "compiler_version": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "binary_sha256": "92142083289ac5f9f78c86252366fc71d45ab66ca2501a74a98db72947d80267",
+        "source_sha256": {
+          "Makefile": "9cfa9fd1887006f1a68abdd13761c4c919e9fee51f1baf3716677e7713023423",
+          "src/approx_knn.cu": "f12c2ff21bad610516fa91e6ae850ea40eb12c215886d1b15fb3df079d6922c3",
+          "src/cpu_reference.cpp": "39702c77f84682f5d8269c4765b1f771815d0eb89744137176f8758b3831a079",
+          "src/kmeans.cu": "25d8c8a1cd192b1d9f9484bb6b6547ed0adf6e1ba6078ebbff54bf421ac8f61f",
+          "src/knn.cu": "7fe1c5efab73622defe04fdc55cf4d3a4956034a9ee5d620c94f0caeb42c52ce",
+          "src/main.cpp": "10cba6dfc2b8c4774cb4be798e516da0c2b65c73af3a98b0d5f0f03068008923",
+          "include/common.hpp": "d9bb2ab4293a969adbcaed5187ea6f35abb26a3b64f606df77c94397d53784d4",
+          "include/input.hpp": "496f0e440644ad78c62dcbd04ee1e80c6c195c7f48d4d0fa1203e81658313821",
+          "include/knn_heap_utils.cuh": "cc8ddf42e19941be516a682e820a9e69597d323cfe96fbc98723549d8a001079"
+        }
+      }
+    },
+    "gpu": {
+      "path": "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+      "sha256": "e3df77f1e56a8afd695258bd4522b4a952a37128bcbc8f53394177803f7988af",
+      "build": {
+        "timestamp_utc": "2026-10-10T07:24:08.474937+00:00",
+        "command": [
+          "nvcc",
+          "-Iinclude",
+          "-O3",
+          "-std=c++17",
+          "-Xcompiler",
+          "-fopenmp",
+          "-arch=sm_87",
+          "src/main.cpp",
+          "src/knn.cu",
+          "src/approx_knn.cu",
+          "src/kmeans.cu",
+          "-o",
+          "build/pointcloud_eq"
+        ],
+        "compiler_version": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2024 NVIDIA Corporation\nBuilt on Wed_Aug_14_10:14:07_PDT_2024\nCuda compilation tools, release 12.6, V12.6.68\nBuild cuda_12.6.r12.6/compiler.34714021_0\n",
+        "binary_sha256": "e3df77f1e56a8afd695258bd4522b4a952a37128bcbc8f53394177803f7988af",
+        "source_sha256": {
+          "Makefile": "9cfa9fd1887006f1a68abdd13761c4c919e9fee51f1baf3716677e7713023423",
+          "src/approx_knn.cu": "f12c2ff21bad610516fa91e6ae850ea40eb12c215886d1b15fb3df079d6922c3",
+          "src/cpu_reference.cpp": "39702c77f84682f5d8269c4765b1f771815d0eb89744137176f8758b3831a079",
+          "src/kmeans.cu": "25d8c8a1cd192b1d9f9484bb6b6547ed0adf6e1ba6078ebbff54bf421ac8f61f",
+          "src/knn.cu": "7fe1c5efab73622defe04fdc55cf4d3a4956034a9ee5d620c94f0caeb42c52ce",
+          "src/main.cpp": "10cba6dfc2b8c4774cb4be798e516da0c2b65c73af3a98b0d5f0f03068008923",
+          "include/common.hpp": "d9bb2ab4293a969adbcaed5187ea6f35abb26a3b64f606df77c94397d53784d4",
+          "include/input.hpp": "496f0e440644ad78c62dcbd04ee1e80c6c195c7f48d4d0fa1203e81658313821",
+          "include/knn_heap_utils.cuh": "cc8ddf42e19941be516a682e820a9e69597d323cfe96fbc98723549d8a001079"
+        }
+      }
+    }
+  },
+  "measurements": {
+    "cpu/knn": {
+      "median_seconds": 26.34173374576494,
+      "min_seconds": 26.207497857976705,
+      "max_seconds": 26.43414203170687,
+      "warmups": [
+        {
+          "seconds": 26.36746498197317,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_knn.txt"
+          ],
+          "stdout": "CPU Walltime: 26.3647 seconds\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        }
+      ],
+      "trials": [
+        {
+          "seconds": 26.235837161075324,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_knn.txt"
+          ],
+          "stdout": "CPU Walltime: 26.2326 seconds\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        },
+        {
+          "seconds": 26.357065313030034,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_knn.txt"
+          ],
+          "stdout": "CPU Walltime: 26.354 seconds\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        },
+        {
+          "seconds": 26.34173374576494,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_knn.txt"
+          ],
+          "stdout": "CPU Walltime: 26.3387 seconds\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        },
+        {
+          "seconds": 26.43414203170687,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_knn.txt"
+          ],
+          "stdout": "CPU Walltime: 26.4311 seconds\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        },
+        {
+          "seconds": 26.207497857976705,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_knn.txt"
+          ],
+          "stdout": "CPU Walltime: 26.2044 seconds\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        }
+      ]
+    },
+    "cpu/kmeans": {
+      "median_seconds": 0.08375229639932513,
+      "min_seconds": 0.08350175805389881,
+      "max_seconds": 0.08389009209349751,
+      "warmups": [
+        {
+          "seconds": 0.0843821750022471,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_kmeans.txt"
+          ],
+          "stdout": "CPU Walltime: 0.08143 seconds\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        }
+      ],
+      "trials": [
+        {
+          "seconds": 0.08386103622615337,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_kmeans.txt"
+          ],
+          "stdout": "CPU Walltime: 0.0809803 seconds\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        },
+        {
+          "seconds": 0.08350175805389881,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_kmeans.txt"
+          ],
+          "stdout": "CPU Walltime: 0.080643 seconds\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        },
+        {
+          "seconds": 0.08389009209349751,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_kmeans.txt"
+          ],
+          "stdout": "CPU Walltime: 0.0810757 seconds\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        },
+        {
+          "seconds": 0.08375229639932513,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_kmeans.txt"
+          ],
+          "stdout": "CPU Walltime: 0.0808744 seconds\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        },
+        {
+          "seconds": 0.08372902637347579,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/cpu_reference",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/cpu_kmeans.txt"
+          ],
+          "stdout": "CPU Walltime: 0.080931 seconds\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        }
+      ]
+    },
+    "gpu/knn": {
+      "median_seconds": 0.16849773889407516,
+      "min_seconds": 0.16697505302727222,
+      "max_seconds": 0.17120099673047662,
+      "warmups": [
+        {
+          "seconds": 0.1672737249173224,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_knn.txt"
+          ],
+          "stdout": "gpu : 0.126976 s\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        }
+      ],
+      "trials": [
+        {
+          "seconds": 0.16849773889407516,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_knn.txt"
+          ],
+          "stdout": "gpu : 0.126911 s\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        },
+        {
+          "seconds": 0.16868596896529198,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_knn.txt"
+          ],
+          "stdout": "gpu : 0.126631 s\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        },
+        {
+          "seconds": 0.16765537206083536,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_knn.txt"
+          ],
+          "stdout": "gpu : 0.12616 s\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        },
+        {
+          "seconds": 0.16697505302727222,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_knn.txt"
+          ],
+          "stdout": "gpu : 0.125146 s\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        },
+        {
+          "seconds": 0.17120099673047662,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_knn.txt"
+          ],
+          "stdout": "gpu : 0.129579 s\n",
+          "stderr": "",
+          "output_sha256": "c125e30977d96b3c48ea3a2e2d333a60d823337f132d8200badd840af3e37892"
+        }
+      ],
+      "speedup_vs_sequential_cpu": 156.33286190460083
+    },
+    "gpu/approx_knn": {
+      "median_seconds": 0.1646385402418673,
+      "min_seconds": 0.16274113487452269,
+      "max_seconds": 0.18125922186300159,
+      "warmups": [
+        {
+          "seconds": 0.1626361389644444,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "approx_knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_approx_knn.txt"
+          ],
+          "stdout": "gpu : 0.122578 s\n",
+          "stderr": "",
+          "output_sha256": "6546126556a3d5ae42f5a9e020c91019be7a2c10041052e40f9d5b07ac00bebd"
+        }
+      ],
+      "trials": [
+        {
+          "seconds": 0.16274113487452269,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "approx_knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_approx_knn.txt"
+          ],
+          "stdout": "gpu : 0.120715 s\n",
+          "stderr": "",
+          "output_sha256": "6546126556a3d5ae42f5a9e020c91019be7a2c10041052e40f9d5b07ac00bebd"
+        },
+        {
+          "seconds": 0.18125922186300159,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "approx_knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_approx_knn.txt"
+          ],
+          "stdout": "gpu : 0.139398 s\n",
+          "stderr": "",
+          "output_sha256": "6546126556a3d5ae42f5a9e020c91019be7a2c10041052e40f9d5b07ac00bebd"
+        },
+        {
+          "seconds": 0.16330255707725883,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "approx_knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_approx_knn.txt"
+          ],
+          "stdout": "gpu : 0.12115 s\n",
+          "stderr": "",
+          "output_sha256": "6546126556a3d5ae42f5a9e020c91019be7a2c10041052e40f9d5b07ac00bebd"
+        },
+        {
+          "seconds": 0.1656432170420885,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "approx_knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_approx_knn.txt"
+          ],
+          "stdout": "gpu : 0.123373 s\n",
+          "stderr": "",
+          "output_sha256": "6546126556a3d5ae42f5a9e020c91019be7a2c10041052e40f9d5b07ac00bebd"
+        },
+        {
+          "seconds": 0.1646385402418673,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "approx_knn",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_approx_knn.txt"
+          ],
+          "stdout": "gpu : 0.122618 s\n",
+          "stderr": "",
+          "output_sha256": "6546126556a3d5ae42f5a9e020c91019be7a2c10041052e40f9d5b07ac00bebd"
+        }
+      ],
+      "speedup_vs_exact_gpu": 1.0234404328812583
+    },
+    "gpu/kmeans": {
+      "median_seconds": 0.1259784298017621,
+      "min_seconds": 0.11413640296086669,
+      "max_seconds": 0.13633131980895996,
+      "warmups": [
+        {
+          "seconds": 0.11389325791969895,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_kmeans.txt"
+          ],
+          "stdout": "gpu : 0.0717998 s\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        }
+      ],
+      "trials": [
+        {
+          "seconds": 0.11413640296086669,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_kmeans.txt"
+          ],
+          "stdout": "gpu : 0.0724346 s\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        },
+        {
+          "seconds": 0.12004509940743446,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_kmeans.txt"
+          ],
+          "stdout": "gpu : 0.0782052 s\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        },
+        {
+          "seconds": 0.1287479712627828,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_kmeans.txt"
+          ],
+          "stdout": "gpu : 0.0872728 s\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        },
+        {
+          "seconds": 0.13633131980895996,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_kmeans.txt"
+          ],
+          "stdout": "gpu : 0.0944964 s\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        },
+        {
+          "seconds": 0.1259784298017621,
+          "command": [
+            "/mnt/nvme/pipeline/cloud-equalize/build/pointcloud_eq",
+            "/mnt/nvme/pipeline/cloud-equalize/outputs/orin-input.txt",
+            "kmeans",
+            "/tmp/pointcloud-bench-p85n4azz/gpu_kmeans.txt"
+          ],
+          "stdout": "gpu : 0.0843567 s\n",
+          "stderr": "",
+          "output_sha256": "7b4ae0de06d2ef4079b17b8547e143f8f70712ca9bf0374603621f0565cc74a4"
+        }
+      ],
+      "speedup_vs_sequential_cpu": 0.6648145760438241
+    }
+  },
+  "quality": {
+    "cpu_gpu_knn": {
+      "mae": 0.0,
+      "max_absolute_error": 0,
+      "different_points": 0,
+      "points": 20000
+    },
+    "cpu_gpu_kmeans": {
+      "mae": 0.0,
+      "max_absolute_error": 0,
+      "different_points": 0,
+      "points": 20000
+    },
+    "morton_vs_exact_gpu": {
+      "mae": 0.90905,
+      "max_absolute_error": 44,
+      "different_points": 2319,
+      "points": 20000
+    }
+  }
+}

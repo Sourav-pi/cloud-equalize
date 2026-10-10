@@ -1,5 +1,39 @@
 # Benchmark Evidence
 
+## Jetson AGX Orin
+
+[jetson-agx-orin.json](jetson-agx-orin.json) records a CUDA/CPU comparison run on October 10, 2026. The report is preserved unchanged from the Jetson execution.
+
+- Hardware: NVIDIA Jetson AGX Orin GPU and ARM Cortex-A78AE CPU; 12 logical CPU cores were reported, while the CPU baseline executes sequentially.
+- Toolchain: CUDA 12.6.68, GCC 11.4.0; GPU target `sm_87`; `-O3` and C++17 for both builds, with OpenMP enabled for CUDA host preprocessing.
+- Source revision: `cb4fa646dd18518be29ad7a4c445bd3e5675025b`; the recorded source worktree was clean.
+- Dataset: 20,000 unique uniformly sampled integer coordinates in `[-10000,10000]` and random 8-bit intensities; `k = 64`, `T = 20`, seed 42.
+- Input SHA-256: `bd954d9e9874cffb67c009e9e8072ff1ca47739351c53fdfd9057597901b0a54`. Regeneration with seed 42 reproduces this hash.
+- Protocol: five measured runs and one discarded warmup per mode, each in a fresh process; OpenMP thread count used the runtime default.
+
+| Mode | CPU Median | GPU Median | Time Ratio |
+| --- | ---: | ---: | --- |
+| Exact KNN | 26.341734 s | 0.168498 s | CPU/GPU: 156.33x |
+| Approximate KNN | - | 0.164639 s | Exact GPU/approximate GPU: 1.023x |
+| K-means | 0.083752 s | 0.125978 s | GPU/CPU: 1.50x (CPU faster) |
+
+Exact KNN and K-means output intensities matched the sequential CPU baseline for all 20,000 points. Morton approximate KNN differed from exact GPU KNN at 2,319 points, with intensity MAE 0.90905 and maximum absolute error 44. All measured and warmup output hashes were deterministic within each mode. The brought-back visualization outputs match the benchmark GPU output hashes.
+
+These are process wall times, including startup, validation, file I/O, preprocessing, allocations, transfers, computation, and teardown. The exact KNN CPU baseline sorts all candidate distances. K-means uses a different neighborhood and is compared with CPU K-means, not with KNN for correctness.
+
+Reproduce from the repository root on the Jetson:
+
+```sh
+export PATH="/usr/local/cuda/bin:$PATH"
+make clean
+make all CUDA_ARCH=sm_87 CXX=g++ NVCC=nvcc
+make validate CUDA_ARCH=sm_87
+python3 scripts/generate_dataset.py --n 20000 --k 64 --iterations 20 --seed 42 --output outputs/orin-input.txt
+python3 scripts/benchmark.py --input outputs/orin-input.txt --backend both --runs 5 --warmup 1 --timeout 3600 --cxx g++ --output results/jetson-agx-orin.json
+```
+
+The raw report retains execution paths from the Jetson, including temporary output paths; they describe the original run. New executions use paths on the current machine. Record the selected power mode and clock settings alongside future reports for comparisons across configurations.
+
 ## Historical Runs
 
 `legacy/stdout.log` and `legacy/stderr.log` preserve the original scheduler outputs byte-for-byte. They identify a Tesla K40m, driver 470.82.01, CUDA toolkit 11.0, GCC 9.1.0, and a build targeting `sm_35`. The log contains three GPU wall-time lines: 5.73007, 4.25865, and 2.37861 seconds.
@@ -30,7 +64,7 @@ Each sample launches a fresh process; warmups may warm filesystem caches but do 
 
 Repeated outputs must be deterministic and structurally valid. With both backends, exact KNN and K-means CPU/GPU output equality is required before publishing their time ratios. Morton error is reported as intensity MAE, maximum absolute error, and number of changed points against GPU exact KNN. Approximation speedup and error should always be presented together. K-means is a different neighborhood model; it is not required to reproduce KNN intensities.
 
-Generated reports live in ignored `results/`. To publish a reviewed result, place its JSON in `docs/benchmarks/` with a short note identifying the hardware, dataset distribution/seed, source revision, validation results, timing scope, and whether the machine was otherwise idle. Avoid reporting tiny fixture timings as scalability evidence. There are currently no reviewed GPU benchmark results for the reorganized project.
+Generated reports live in ignored `results/`. Published evidence lives in `docs/benchmarks/`, including the Jetson AGX Orin report above. To publish another reviewed result, place its JSON here with a short note identifying the hardware, dataset distribution/seed, source revision, validation results, timing scope, and whether the machine was otherwise idle. Avoid reporting tiny fixture timings as scalability evidence.
 
 ## Cluster Execution
 
